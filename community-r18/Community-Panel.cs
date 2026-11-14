@@ -76,6 +76,7 @@ public sealed class CommunityPanel:Form {
   Location=new Point(Math.Max(bounds.Left,Math.Min(Location.X,bounds.Right-Width)),Math.Max(bounds.Top,Math.Min(Location.Y,bounds.Bottom-Height)));
   clock=new Label{Bounds=new Rectangle(6,5,260,23),TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Tahoma",12,FontStyle.Bold),Cursor=Cursors.SizeAll};
   clock.MouseDown+=(s,e)=>{if(e.Button==MouseButtons.Left){ReleaseCapture();SendMessage(Handle,0xA1,new IntPtr(2),IntPtr.Zero);}};
+  clock.Text=DateTime.Now.ToString("h:mm:ss tt");
   Controls.Add(clock);tips.SetToolTip(clock,"Local time. Drag here to move the panel.");
   account=new ComboBox{Bounds=new Rectangle(6,31,230,24),DropDownStyle=ComboBoxStyle.DropDownList};Controls.Add(account);
   var refresh=Make("↻",238,31,28,24,"Refresh the STFC window list",RefreshGames);
