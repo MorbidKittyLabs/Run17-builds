@@ -1,0 +1,139 @@
+name: Build and scan Community R18
+on:
+  push:
+    paths: ['community-r18/**', '.github/workflows/community-r18.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: community-r18-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: STFC-Mod/mod
+          ref: 37e33084b711499c1ae3cc1988b58400c097546f
+          path: source
+      - run: python3 community-r18/prepare_source.py source
+      - name: Check readers, one-request attacks, loader and transactional saves
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libtomlplusplus-dev
+          for test_name in fleet_readings_policy pursuit_observer tactical_policy station_observer target_audit_policy; do
+            g++ -std=c++23 -Wall -Wextra -Werror -fsanitize=address,undefined -I source/mods/src community-r18/tests/${test_name}_test.cc -o /tmp/${test_name}
+            /tmp/${test_name}
+          done
+          g++ -std=c++23 -Wall -Wextra -Werror -I source/win-proxy-dll/src community-r18/tests/loader_policy_test.cc -o /tmp/loader
+          /tmp/loader
+          g++ -std=c++23 -Wall -Wextra -Werror -Wno-unused-parameter -fsanitize=address,undefined -I community-r18/tests/hostile_fakes -I source/mods/src community-r18/tests/manual_attack_test.cc -o /tmp/manual-attack
+          /tmp/manual-attack
+          g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/settings_save_test.cc source/mods/src/toml_editor.cc source/mods/src/config_save.cc -ltomlplusplus -o /tmp/settings-save
+          mkdir /tmp/settings-fixture
+          /tmp/settings-save /tmp/settings-fixture
+          g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/system_zoom_save_test.cc -o /tmp/zoom-save
+          /tmp/zoom-save
+  windows:
+    needs: policy
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 100
+    env:
+      STFC_SOURCE_STATE_ID: community:${{ github.sha }}
+      STFC_BASE_COMMIT: 37e33084b711499c1ae3cc1988b58400c097546f
+      STFC_BUILD_INVOCATION_ID: github:${{ github.run_id }}:${{ github.run_attempt }}:windows
+      STFC_BUILD_CHANNEL: community-r18
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: STFC-Mod/mod
+          ref: 37e33084b711499c1ae3cc1988b58400c097546f
+          path: source
+          show-progress: false
+      - run: python community-r18/prepare_source.py source
+      - uses: xmake-io/github-action-setup-xmake@v1.2.5
+        with:
+          xmake-version: '3.1.0'
+      - id: cache-path
+        shell: pwsh
+        run: |
+          $dir=(xmake l -c 'import("core.package.package"); print(package.installdir())').Trim()
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.cache-path.outputs.dir }}
+          key: community-windows-xmake-3.1.0-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock') }}
+      - name: Stamp and compile fresh Windows DLL
+        working-directory: source
+        shell: pwsh
+        run: |
+          python scripts/stamp-version-hash.py $env:GITHUB_SHA
+          xmake f -p windows -a x64 -m release -y
+          if ($LASTEXITCODE -ne 0) { throw 'XMake configure failed' }
+          xmake build -y -v stfc-community-mod
+          if ($LASTEXITCODE -ne 0) { throw 'DLL build failed' }
+      - name: Build and render optional single-account panel
+        shell: pwsh
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /out:community-r18/Community-Panel.exe community-r18/Community-Panel.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
+          $proc=Start-Process -PassThru -Wait community-r18/Community-Panel.exe -ArgumentList @('--verify-ui','ui-evidence')
+          if ($proc.ExitCode -ne 0) { throw 'Panel rendering or persistence validation failed' }
+          python community-r18/package_release.py
+          python community-r18/verify_export.py package --binary
+          if ($LASTEXITCODE -ne 0) { throw 'Export audit failed' }
+      - name: Update Microsoft Defender and scan the complete package
+        shell: powershell
+        run: ./community-r18/scan_defender.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Community-R18-Defender-Scanned
+          path: |
+            package/
+            Community-R18-Source.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Community-R18-UI-Evidence
+          path: ui-evidence/
+          if-no-files-found: ignore
+  publish:
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: Community-R18-Defender-Scanned
+          path: scanned
+      - name: Stage Defender-scanned files
+        run: |
+          mv scanned/package package
+          mv scanned/Community-R18-Source.zip .
+      - name: Update ClamAV and scan complete package and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav
+          sudo systemctl stop clamav-freshclam.service || true
+          sudo freshclam
+          clamscan --version | tee package/ClamAV-Scan.txt
+          sha256sum package/version.dll package/Community-Panel.exe | tee -a package/ClamAV-Scan.txt
+          clamscan --recursive --verbose --allmatch --max-filesize=200M --max-scansize=500M package/ Community-R18-Source.zip | tee -a package/ClamAV-Scan.txt
+          python3 community-r18/package_release.py complete
+      - name: Publish scanned downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="community-r18-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" STFC-Community-R18-Windows.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "STFC Community R18 — Single Account" --notes-file community-r18/RELEASE-NOTES.md --prerelease
