@@ -116,7 +116,7 @@ public sealed class CommunityPanel:Form {
  }
  bool FocusGame(GameChoice g){if(IsIconic(g.Window))ShowWindow(g.Window,9);SetForegroundWindow(g.Window);return GetForegroundWindow()==g.Window;}
  static void Key(byte key,bool up){keybd_event(key,0,up?2u:0u,UIntPtr.Zero);}
- void SendShip(int ship){var g=RequireGame();if(!FocusGame(g))throw new InvalidOperationException("Click STFC first, then try again.");Key((byte)(0x30+ship),false);Key((byte)(0x30+ship),true);}
+ void SendShip(int ship){var g=RequireGame();if(!FocusGame(g))throw new InvalidOperationException("Click STFC first, then try again.");Key((byte)(0x30+ship),false);Thread.Sleep(60);Key((byte)(0x30+ship),true);}
  void VoiceTyping(){var g=RequireGame();if(!FocusGame(g))throw new InvalidOperationException("Click STFC first, then try again.");Key(0x5B,false);Key(0x48,false);Key(0x48,true);Key(0x5B,true);}
  void SaveSettings(){
   if(saved!=null)return;var g=RequireGame();

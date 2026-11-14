@@ -68,6 +68,15 @@ jobs:
         with:
           path: ${{ steps.cache-path.outputs.dir }}
           key: community-windows-xmake-3.1.0-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock') }}
+      - name: Build and render optional single-account panel
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /out:community-r18/Community-Panel.exe community-r18/Community-Panel.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
+          $proc=Start-Process -PassThru -Wait community-r18/Community-Panel.exe -ArgumentList @('--verify-ui','ui-evidence')
+          if ($proc.ExitCode -ne 0) { throw 'Panel rendering or persistence validation failed' }
       - name: Stamp and compile fresh Windows DLL
         working-directory: source
         shell: pwsh
@@ -77,14 +86,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'XMake configure failed' }
           xmake build -y -v stfc-community-mod
           if ($LASTEXITCODE -ne 0) { throw 'DLL build failed' }
-      - name: Build and render optional single-account panel
+      - name: Package and audit compiled files
         shell: pwsh
         run: |
-          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /out:community-r18/Community-Panel.exe community-r18/Community-Panel.cs
-          if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
-          $proc=Start-Process -PassThru -Wait community-r18/Community-Panel.exe -ArgumentList @('--verify-ui','ui-evidence')
-          if ($proc.ExitCode -ne 0) { throw 'Panel rendering or persistence validation failed' }
           python community-r18/package_release.py
           python community-r18/verify_export.py package --binary
           if ($LASTEXITCODE -ne 0) { throw 'Export audit failed' }
