@@ -73,9 +73,11 @@ jobs:
         shell: pwsh
         run: |
           $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /out:community-r18/Community-Panel.exe community-r18/Community-Panel.cs
+          $panelSource=Join-Path $env:GITHUB_WORKSPACE 'community-r18/Community-Panel.cs'
+          $panelOutput=Join-Path $env:GITHUB_WORKSPACE 'community-r18/Community-Panel.exe'
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll ('/out:'+$panelOutput) $panelSource
           if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
-          $proc=Start-Process -PassThru -Wait community-r18/Community-Panel.exe -ArgumentList @('--verify-ui','ui-evidence')
+          $proc=Start-Process -FilePath $panelOutput -PassThru -Wait -ArgumentList @('--verify-ui','ui-evidence')
           if ($proc.ExitCode -ne 0) { throw 'Panel rendering or persistence validation failed' }
       - name: Stamp and compile fresh Windows DLL
         working-directory: source
