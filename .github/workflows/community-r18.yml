@@ -142,4 +142,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="community-r18-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" STFC-Community-R18-Windows.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "STFC Community R18 — Single Account" --notes-file community-r18/RELEASE-NOTES.md --prerelease
+          export_root="$RUNNER_TEMP/community-r18-public-source"
+          mkdir -p "$export_root/.github/workflows"
+          cp -a community-r18 "$export_root/community-r18"
+          cp community-r18/README.md "$export_root/README.md"
+          cp community-r18/LICENSE "$export_root/LICENSE"
+          cp .github/workflows/community-r18.yml "$export_root/.github/workflows/community-r18.yml"
+          export GIT_INDEX_FILE="$RUNNER_TEMP/community-r18-export.index"
+          git read-tree --empty
+          git --work-tree="$export_root" add --all
+          export_tree=$(git write-tree)
+          export_commit=$(printf '%s\n' 'STFC Community R18 clean source export' | git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit-tree "$export_tree")
+          git push origin "$export_commit:refs/heads/community-r18-source-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" STFC-Community-R18-Windows.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "STFC Community R18 — Single Account" --notes-file community-r18/RELEASE-NOTES.md --prerelease
