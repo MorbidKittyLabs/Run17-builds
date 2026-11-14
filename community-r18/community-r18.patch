@@ -786,10 +786,10 @@ index 0000000..4444933
 +}
 diff --git a/mods/src/fleet_diagnostics.cc b/mods/src/fleet_diagnostics.cc
 new file mode 100644
-index 0000000..19da294
+index 0000000..9e8f7eb
 --- /dev/null
 +++ b/mods/src/fleet_diagnostics.cc
-@@ -0,0 +1,541 @@
+@@ -0,0 +1,528 @@
 +#include "fleet_diagnostics.h"
 +#if _WIN32
 +#include "fleet_readings_policy.h"
@@ -799,7 +799,7 @@ index 0000000..19da294
 +#include "prime/ObjectViewerBaseWidget.h"
 +#include "prime/ScanEngageButtonsWidget.h"
 +#include "prime/PreScanTargetWidget.h"
-+#include "prime/CallbackContainer.h"
++#include "prime/FleetLocalViewController.h"
 +#include <spud/detour.h>
 +#include "patches/key.h"
 +#include "str_utils.h"
@@ -1294,20 +1294,9 @@ index 0000000..19da294
 +// No selection changes, timers, retries, repair actions, or other clients.
 +void RecallAll() noexcept {
 +  try {
-+    auto* manager=DiagnosticManager();
-+    if(!manager)return;
-+    auto* cls=il2cpp_object_get_class(manager);
-+    const auto* method=il2cpp_class_get_method_from_name(cls,"RecallFleet",2);
-+    if(!method || (method->flags&METHOD_ATTRIBUTE_STATIC))return;
-+    const auto* id_type=il2cpp_method_get_param(method,0);
-+    const auto* callback_type=il2cpp_method_get_param(method,1);
-+    const auto* output=il2cpp_method_get_return_type(method);
-+    if(!id_type || id_type->byref || (id_type->type!=IL2CPP_TYPE_I8 && id_type->type!=IL2CPP_TYPE_U8)
-+       || !callback_type || callback_type->byref || (callback_type->type!=IL2CPP_TYPE_CLASS && callback_type->type!=IL2CPP_TYPE_GENERICINST && callback_type->type!=IL2CPP_TYPE_OBJECT)
-+       || !output || output->type!=IL2CPP_TYPE_VOID) {
-+      spdlog::warn("F7 recall unavailable: native method signature changed");return;
-+    }
 +    auto* bar=ObjectFinder<FleetBarViewController>::Get();
++    auto* controller=bar?bar->_fleetPanelController:nullptr;
++    if(!controller)return;
 +    Json status;
 +    const auto roster=DiagnosticRoster(bar,nullptr,status);
 +    int requested=0;
@@ -1316,13 +1305,11 @@ index 0000000..19da294
 +      if(state!=FleetState::IdleInSpace && state!=FleetState::Impulsing
 +          && state!=FleetState::Mining && state!=FleetState::Capturing)continue;
 +      uint64_t id=fleet->Id;
-+      auto* callback=reinterpret_cast<Il2CppObject*>(CallbackContainer::Create());
-+      auto* expected=il2cpp_class_from_type(callback_type);
-+      if(!callback || !expected || !il2cpp_class_is_assignable_from(expected,il2cpp_object_get_class(callback)))continue;
-+      void* args[]={&id,callback};Il2CppException* exception=nullptr;
-+      il2cpp_runtime_invoke(method,manager,args,&exception);
-+      if(!exception)++requested;
-+      DiagnosticEvent("manual_recall_requested",GetTickCount64(),{{"fleet_id",std::to_string(id)},{"native_exception",exception!=nullptr}});
++      // Same typed, native request path used by the existing Recall shortcut.
++      // Pass the intended own fleet explicitly; never mutate UI selection.
++      const bool accepted=controller->RequestAction(fleet,ActionType::Recall,0,ActionBehaviour::Default);
++      if(accepted)++requested;
++      DiagnosticEvent("manual_recall_requested",GetTickCount64(),{{"fleet_id",std::to_string(id)},{"accepted",accepted}});
 +    }
 +    spdlog::info("F7: native recall requested for {} eligible fleets",requested);
 +  } catch(...) {spdlog::warn("F7 recall unavailable in the current client context");}
