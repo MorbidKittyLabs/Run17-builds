@@ -51,5 +51,7 @@ Live F6/F7, occupied-node views, voice typing and camera restoration still need 
 SOURCE AND LICENSE
 Based on STFC-Mod/mod, commit 37e33084b711499c1ae3cc1988b58400c097546f.
 https://github.com/STFC-Mod/mod
+Transactional TOML save/editor helpers credit Guffawaffle/stfc-mod, commit
+2395ba5f6599fd06942beffe0ad0212b0151754f (proposed upstream in PR #280).
 GPL-3.0; see LICENSE. Corresponding clean source is supplied as a separate release asset.
 Public download page: https://github.com/MorbidKittyLabs/Run17-builds/releases
