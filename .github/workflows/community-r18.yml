@@ -64,7 +64,8 @@ jobs:
         run: |
           $dir=(xmake l -c 'import("core.package.package"); print(package.installdir())').Trim()
           "dir=$dir" >> $env:GITHUB_OUTPUT
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: restore-packages
         with:
           path: ${{ steps.cache-path.outputs.dir }}
           key: community-windows-xmake-3.1.0-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock') }}
@@ -79,13 +80,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
           $proc=Start-Process -FilePath $panelOutput -PassThru -Wait -ArgumentList @('--verify-ui','ui-evidence')
           if ($proc.ExitCode -ne 0) { throw 'Panel rendering or persistence validation failed' }
-      - name: Stamp and compile fresh Windows DLL
+      - name: Stamp source and configure Windows dependencies
         working-directory: source
         shell: pwsh
         run: |
           python scripts/stamp-version-hash.py $env:GITHUB_SHA
           xmake f -p windows -a x64 -m release -y
           if ($LASTEXITCODE -ne 0) { throw 'XMake configure failed' }
+      - name: Save completed dependency installation
+        if: steps.restore-packages.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.cache-path.outputs.dir }}
+          key: ${{ steps.restore-packages.outputs.cache-primary-key }}
+      - name: Compile fresh Windows DLL
+        working-directory: source
+        shell: pwsh
+        run: |
           xmake build -y -v stfc-community-mod
           if ($LASTEXITCODE -ne 0) { throw 'DLL build failed' }
       - name: Package and audit compiled files
