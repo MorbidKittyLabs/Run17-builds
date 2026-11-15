@@ -5,6 +5,8 @@ try {
     if (-not $GameDirectory -and (Test-Path (Join-Path $PSScriptRoot 'Prime.exe'))) {
         $GameDirectory = @($PSScriptRoot)
     }
+    $parentGame = Split-Path -Parent $PSScriptRoot
+    if (-not $GameDirectory -and (Test-Path -LiteralPath (Join-Path $parentGame 'Prime.exe') -PathType Leaf)) { $GameDirectory = @($parentGame) }
     $usualGame = 'C:\Games\Star Trek Fleet Command\Star Trek Fleet Command\default\game'
     if (-not $GameDirectory -and (Test-Path -LiteralPath (Join-Path $usualGame 'Prime.exe') -PathType Leaf)) {
         $GameDirectory = @($usualGame)
@@ -45,8 +47,8 @@ try {
             $notes.Add('DLL identity: ' + $identity.Comments)
             $notes.Add('DLL SHA256: ' + (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash)
         } else { $notes.Add('version.dll was not found beside Prime.exe.') }
-        $patterns = @('*_hostile_action.log', '*_collective_diagnostic.log', '*_collective_crash_*.dmp',
-                      'community_patch*.log', 'Run17OccupiedMinerDiag.log', '*_fleet_diagnostics.log', '*.log.1', '*.log.2', '*.log.3')
+        $patterns = @('*_hostile_action*.log', '*_collective_diagnostic*.log', '*_collective_crash_*.dmp',
+                      'community_patch*.log', 'Run17OccupiedMinerDiag.log', '*_fleet_diagnostics*.log', '*.log.1', '*.log.2', '*.log.3')
         $roots = @($game)
         $modRoot = Join-Path $game 'stfc-mod'
         if (Test-Path -LiteralPath $modRoot) { $roots += $modRoot }

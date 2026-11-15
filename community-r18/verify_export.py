@@ -1,4 +1,4 @@
-"""Fail closed if a private controller/attack-loop component enters an export."""
+"""Audit the expected community export boundary."""
 from pathlib import Path
 import sys
 FORBIDDEN=(b'DSE.Background',b'DSE-STFC',b'MorbidKitty.DSE',b'background_control::',
@@ -15,4 +15,4 @@ for p in paths:
   if word in data or word.decode().encode('utf-16-le') in data:raise SystemExit(f'Excluded component marker in {p}: {word.decode()}')
  checked+=1
 if not checked:raise SystemExit('Nothing audited')
-print(f'PASS: {checked} {"binaries" if binary else "source/config files"} contain no excluded controller/loop markers')
+print(f'PASS: {checked} {"binaries" if binary else "source/config files"} pass the community export audit')

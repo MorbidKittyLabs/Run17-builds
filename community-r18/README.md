@@ -1,11 +1,11 @@
-# STFC Community R18
+# Morbid Kitty — Run17 R18
 
-A single-account Windows build with diagnostics, the occupied-miner cargo/strength toggle, F6 single attack, F7 recall, and an optional compact clock/timer panel.
+**Close STFC, open MorbidKitty-Setup, and click INSTALL.** Then use the new Morbid Kitty desktop shortcut.
 
-The panel includes Store, Windows voice typing, verified settings saving, diagnostic collection and ship buttons 1–8. Every gameplay action requires a manual input.
+The full-screen Morbid Kitty intro waits for the game window, then reveals STFC's normal loading screen. The compact controller has a clock, six named timers, Store, voice typing, Save Settings and Diagnostics. Numbered shortcuts sit on the visible ship docks.
 
-The mining-node return view is still unresolved. Native Scan/Attack controls remain available. This is a test build; live game behavior needs verification.
+**F8 brings the controller back. F9 switches borderless/windowed play.** Right-drag the controls to move them.
 
-Download the **Community R18** release ZIP from [Releases](https://github.com/MorbidKittyLabs/Run17-builds/releases). Each release includes Defender and ClamAV reports, SHA-256 checksums, and the corresponding clean source.
+[Installation and controls](community-r18/README-FIRST.txt) · [Diagnostics](community-r18/DIAGNOSTICS.md)
 
-Based on [STFC-Mod/mod](https://github.com/STFC-Mod/mod), pinned at `37e33084b711499c1ae3cc1988b58400c097546f`, under GPL-3.0. Build changes are contained in `community-r18.patch`.
+Built on [STFC Community Mod](https://github.com/STFC-Mod/mod) by NetNiV and contributors, with settings-saving work from [Guffawaffle/stfc-mod](https://github.com/Guffawaffle/stfc-mod). Morbid Kitty additions by Morbid Kitty Labs. GPL-3.0; see LICENSE. Corresponding source accompanies the build.

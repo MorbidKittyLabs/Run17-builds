@@ -82,7 +82,7 @@ void Add(int64_t id,double x,hostile_audit::Motion motion=hostile_audit::Motion:
 }
 void Reset()
 {
-  CancelSelectAttackHostile("fixture reset");
+  ResetHeldSelectAttackHostile();
   tactical_fixture::elites.clear();tactical_fixture::eta.clear();
   tactical_fixture::queue_busy=tactical_fixture::model_combat=false;
   tactical_fixture::busy_calls=tactical_fixture::busy_on_call=0;
@@ -123,5 +123,17 @@ int main() {
   own.CurrentState=FleetState::IdleInSpace;Tick(false);assert(attacks==0 && selected.empty());
   Reset();Add(10,10);Tick(true);sections.CurrentSection=SectionID::Other;
   Tick(false);assert(attacks==0);
-  std::cout<<"PASS: one attack per press; no repeat after completion, cancellation, ship/view changes, queued actions or combat\n";
+  Reset();Add(10,10);
+  auto held_tick=[](bool press,bool held){if(auto it=pursuits.find(local.fleet->Id);it!=pursuits.end())it->second.next_update=0;UpdateHeldSelectAttackHostile(&bar,press,held,true);};
+  held_tick(true,true);held_tick(false,false);assert(attacks==1);
+  own.CurrentState=FleetState::IdleInSpace;
+  for(int i=0;i<100;++i){held_tick(false,false);}
+  assert(attacks==1);
+  held_tick(true,true);held_tick(false,true);assert(attacks==2);own.CurrentState=FleetState::IdleInSpace;
+  held_gate.began=NowMs()-1000;held_gate.last=NowMs()-600;
+  held_tick(false,true);held_tick(false,true);assert(attacks==3);own.CurrentState=FleetState::IdleInSpace;
+  held_gate.last=NowMs()-600;held_tick(false,true);held_tick(false,false);
+  for(int i=0;i<100;++i){held_tick(false,false);}
+  assert(attacks==3);
+  std::cout<<"PASS: tap dispatch, held repeat, release cancellation, ship/view changes, queue and combat guards\n";
 }
