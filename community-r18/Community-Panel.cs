@@ -97,7 +97,7 @@ public sealed class CommunityPanel:Form {
   FormBorderStyle=FormBorderStyle.None;MaximizeBox=false;ShowInTaskbar=false;TopMost=true;
   Font=new Font("Tahoma",9);BackColor=Color.Magenta;TransparencyKey=Color.Magenta;ForeColor=Color.FromArgb(244,252,255);
   StartPosition=FormStartPosition.Manual;Location=new Point(40,40);GamePaths.IconFor(this,root);
-  var brand=new Label{Text="Morbid Kitty",Bounds=new Rectangle(3,0,75,20),TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Tahoma",8,FontStyle.Bold),ForeColor=Color.FromArgb(164,255,104)};Controls.Add(brand);
+  var brand=new Label{Text="Morbid Kitty",Bounds=new Rectangle(3,0,75,20),TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Tahoma",7,FontStyle.Bold),ForeColor=Color.FromArgb(164,255,104)};Controls.Add(brand);
   var hide=Make("X",80,0,23,20,"Hide controller — F8 or right-click the edge handle restores it",HideMenu);hide.AccessibleName="Hide controller";hide.ForeColor=Color.FromArgb(255,100,115);
   clock=new GameClock{Bounds=new Rectangle(3,22,100,28),TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Tahoma",10,FontStyle.Bold),Cursor=Cursors.SizeAll};
   clock.Text=DateTime.Now.ToString("h:mm:ss tt");Controls.Add(clock);tips.SetToolTip(clock,"Clock • right-drag any control to move the menu");
