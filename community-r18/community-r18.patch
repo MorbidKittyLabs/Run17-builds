@@ -321,10 +321,10 @@ index 0000000..93b4527
 +}
 diff --git a/mods/src/community_panel.cc b/mods/src/community_panel.cc
 new file mode 100644
-index 0000000..5ea4b91
+index 0000000..e88070c
 --- /dev/null
 +++ b/mods/src/community_panel.cc
-@@ -0,0 +1,233 @@
+@@ -0,0 +1,240 @@
 +#include "community_panel.h"
 +#if _WIN32
 +#include "community_panel_policy.h"
@@ -374,6 +374,7 @@ index 0000000..5ea4b91
 +HANDLE voice_request=nullptr,voice_ready=nullptr,voice_failed=nullptr;
 +HANDLE voice_close=nullptr,voice_closed=nullptr,voice_close_failed=nullptr;
 +bool voice_pending=false;uint64_t voice_deadline=0;
++bool voice_closing=false;uint64_t voice_close_deadline=0;
 +std::wstring VoiceEvent(const wchar_t* kind){return L"Local\\STFC.Community.Voice."+std::wstring(kind)+L"."+std::to_wstring(GetCurrentProcessId());}
 +SharedHud* published=nullptr;
 +HANDLE mapping=nullptr;
@@ -493,6 +494,7 @@ index 0000000..5ea4b91
 +  auto* top=TopCanvas();
 +  const bool canvas_ready=top&&Rendered(top)&&Boolean(top,"Visible").value_or(true);
 +  auto* transition=transition_handle?il2cpp_gchandle_get_target(transition_handle):nullptr;
++  if(transition_handle&&!transition)transition_pending=false;
 +  const bool transitioning=transition_pending||(transition&&Rendered(transition))||Boolean(reinterpret_cast<Il2CppObject*>(sections),"IsTransitioning").value_or(false);
 +  const bool show=Visible(view||chat||ships||active.value_or(false),top!=nullptr,canvas_ready,!canvas_ready||LoadingCanvas(top)||transitioning||ModalCanvas());
 +  auto* manager=FleetsManager::Instance();
@@ -511,8 +513,13 @@ index 0000000..5ea4b91
 +  }
 +  if(voice_close&&WaitForSingleObject(voice_close,0)==WAIT_OBJECT_0) {
 +   voice_pending=false;
-+   const bool ok=foreground==GetCurrentProcessId()&&CloseChat();
-+   if(auto event=ok?voice_closed:voice_close_failed)SetEvent(event);
++   voice_closing=foreground==GetCurrentProcessId()&&CloseChat();voice_close_deadline=now+2500;
++   if(!voice_closing&&voice_close_failed)SetEvent(voice_close_failed);
++  }
++  if(voice_closing) {
++   auto* chat_manager=ChatManager::Instance();
++   if(!Hub::IsInChat()&&chat_manager&&!chat_manager->IsSideChatOpen){voice_closing=false;if(voice_closed)SetEvent(voice_closed);}
++   else if(now>=voice_close_deadline){voice_closing=false;if(voice_close_failed)SetEvent(voice_close_failed);}
 +  }
 +  if(voice_pending){
 +    if(!show || ModalCanvas() || foreground!=GetCurrentProcessId() || now>voice_deadline){voice_pending=false;if(voice_failed)SetEvent(voice_failed);}
@@ -596,10 +603,10 @@ index 0000000..b2bc7ec
 +}
 diff --git a/mods/src/community_panel_ui.inc b/mods/src/community_panel_ui.inc
 new file mode 100644
-index 0000000..b71d413
+index 0000000..7c9621d
 --- /dev/null
 +++ b/mods/src/community_panel_ui.inc
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,169 @@
 +// Runtime UI observation. Included inside community_panel's private namespace.
 +// No new detours: all managed calls run in the existing main-thread Pump.
 +Il2CppClass* UiClass(const char* assembly,const char* ns,const char* name) {
@@ -624,10 +631,10 @@ index 0000000..b71d413
 + if(!value||value->length<0||value->length>256)return {};
 + auto name=to_string(value);std::transform(name.begin(),name.end(),name.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});return name;
 +}
-+Il2CppArraySize* Components(Il2CppObject* object,Il2CppClass* type,bool parents=false) {
++Il2CppArraySize* Components(Il2CppObject* object,Il2CppClass* type,bool parents=false,bool include_inactive=false) {
 + auto* go=Reference(object,"gameObject");if(!go||!type)return nullptr;
 + auto* method=UiMethod(go->klass,parents?"GetComponentsInParent":"GetComponentsInChildren","UnityEngine.Component[]",{"System.Type","System.Boolean"});
-+ bool inactive=false;void* args[]={il2cpp_type_get_object(il2cpp_class_get_type(type)),&inactive};
++ void* args[]={il2cpp_type_get_object(il2cpp_class_get_type(type)),&include_inactive};
 + auto* items=reinterpret_cast<Il2CppArraySize*>(Invoke(method,go,args));return items&&items->max_length<=2048?items:nullptr;
 +}
 +bool Rendered(Il2CppObject* component) {
@@ -676,10 +683,26 @@ index 0000000..b71d413
 + if(now<next_dock_scan)return;next_dock_scan=now+1000;
 + for(auto& handle:dock_widgets)if(handle){il2cpp_gchandle_free(handle);handle=0;}
 + static auto* component=UiClass("UnityEngine.CoreModule","UnityEngine","Component");
-+ auto* array=Components(reinterpret_cast<Il2CppObject*>(bar),component);if(!array)return;
++ auto* array=Components(reinterpret_cast<Il2CppObject*>(bar),component,false,true);if(!array)return;
 + for(size_t i=0;i<array->max_length;i++) {
 +  auto* item=reinterpret_cast<Il2CppObject**>(array->vector)[i];if(!item)continue;
 +  std::string_view type=il2cpp_class_get_name(item->klass);
++  // Native ship action hints already identify dock corners. Their letters refer
++  // to FleetData display positions, so resolve the actual dock Index first.
++  if(type=="ShortcutKeybindHint") {
++   auto* field=il2cpp_class_get_field_from_name(item->klass,"_inputAction");Il2CppObject* action_ref=nullptr;
++   if(field&&field->type&&field->type->type==IL2CPP_TYPE_CLASS&&!(il2cpp_field_get_flags(field)&FIELD_ATTRIBUTE_STATIC))il2cpp_field_get_value(item,field,&action_ref);
++   auto* action=Reference(action_ref,"action");auto name=UiName(action);
++   if(name.size()==6&&name.starts_with("ship_")&&name.back()>='a'&&name.back()<='h') {
++    const auto pos=static_cast<size_t>(name.back()-'a');auto* context=bar->CanvasContext();auto* fleets=context?context->FleetData():nullptr;
++    if(fleets&&fleets->max_length<=8&&pos<fleets->max_length) {
++     auto* fleet=reinterpret_cast<FleetPlayerData**>(fleets->vector)[pos];const auto index=fleet?fleet->Index:-1;
++     auto* parent=Reference(Reference(item,"transform"),"parent");
++     if(index>=0&&index<8&&fleet->Hull&&parent&&!dock_widgets[index])dock_widgets[index]=il2cpp_gchandle_new_weakref(parent,false);
++    }
++   }
++   continue;
++  }
 +  if(type.find("Fleet")==std::string_view::npos||type.find("BarViewController")!=std::string_view::npos)continue;
 +  int index=FleetIndex(Reference(item,"CanvasContext"));if(index<0)index=FleetIndex(Reference(item,"Context"));if(index<0)index=FleetIndex(item);
 +  if(index<0||index>=8||dock_widgets[index])continue;
@@ -727,7 +750,7 @@ index 0000000..b71d413
 + auto* buttons=Components(controller,button_cls);if(!buttons)return false;
 + for(size_t i=0;i<buttons->max_length;i++) {
 +  auto* button=reinterpret_cast<Il2CppObject**>(buttons->vector)[i];auto name=UiName(button);
-+  if(name.find("close")==std::string::npos||!Rendered(button)||!Boolean(button,"interactable").value_or(false))continue;
++  if((name.find("close")==std::string::npos&&!(Hub::IsInChat()&&name.find("back")!=std::string::npos))||!Rendered(button)||!Boolean(button,"interactable").value_or(false))continue;
 +  auto* click=Reference(button,"onClick");auto* invoke=click?UiMethod(click->klass,"Invoke","System.Void"):nullptr;
 +  if(invoke&&Il2CppRuntime::TryInvoke(invoke,click,nullptr))return true;
 + }

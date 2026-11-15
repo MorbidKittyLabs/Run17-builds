@@ -119,6 +119,7 @@ public sealed class TimerNotice:Form {
 
 public sealed class DockShortcut:Form {
  readonly GameButton button;
+ Font numberFont;
  public DockShortcut(int number,Action select){
   AutoScaleMode=AutoScaleMode.None;
   FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;BackColor=Color.Magenta;TransparencyKey=Color.Magenta;
@@ -128,8 +129,9 @@ public sealed class DockShortcut:Form {
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
  public void Place(Rectangle dock,float scale){
   int size=Math.Max(14,Math.Min((int)Math.Round(22*scale),Math.Min(dock.Width,dock.Height)/2));ClientSize=new Size(size,size);
-  Location=new Point(dock.Left+2,dock.Top+2);if(button.Font.Size!=Math.Max(7,9*scale)){var old=button.Font;button.Font=new Font("Tahoma",Math.Max(7,9*scale),FontStyle.Bold);if(old!=SystemFonts.DefaultFont)old.Dispose();}
+  Location=new Point(dock.Left+2,dock.Top+2);if(numberFont==null||numberFont.Size!=Math.Max(7,9*scale)){var old=numberFont;numberFont=new Font("Tahoma",Math.Max(7,9*scale),FontStyle.Bold);button.Font=numberFont;if(old!=null)old.Dispose();}
  }
+ protected override void Dispose(bool disposing){base.Dispose(disposing);if(disposing&&numberFont!=null){numberFont.Dispose();numberFont=null;}}
 }
 
 public sealed class CommunityPanel:Form {

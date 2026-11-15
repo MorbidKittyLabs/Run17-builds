@@ -95,7 +95,7 @@ jobs:
           & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /define:UNINSTALL_ENTRY @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'MorbidKitty-Uninstall.exe')) $common (Join-Path $toolRoot 'MorbidKitty-Setup.cs')
           if ($LASTEXITCODE -ne 0) { throw 'Uninstaller build failed' }
           $proc=Start-Process -FilePath (Join-Path $toolRoot 'Community-Panel.exe') -PassThru -Wait -ArgumentList @('--verify-ui','ui-evidence')
-          if ($proc.ExitCode -ne 0) { throw 'Panel/intro validation failed' }
+          if ($proc.ExitCode -ne 0) { if (Test-Path panel-error.txt) { Get-Content panel-error.txt }; throw 'Panel/intro validation failed' }
       - name: Stamp source and configure Windows dependencies
         working-directory: source
         shell: pwsh
