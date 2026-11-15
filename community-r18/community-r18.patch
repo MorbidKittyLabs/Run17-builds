@@ -288,11 +288,12 @@ new file mode 100644
 index 0000000..bd1c71b
 --- /dev/null
 +++ b/mods/src/community_panel.cc
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,135 @@
 +#include "community_panel.h"
 +#if _WIN32
 +#include "community_panel_policy.h"
 +#include "config.h"
++#include "errormsg.h"
 +#include "prime/Hub.h"
 +#include "str_utils.h"
 +#include <il2cpp/il2cpp_helper.h>
