@@ -6,7 +6,8 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 [assembly:AssemblyTitle("Morbid Kitty STFC Launcher")]
 [assembly:AssemblyDescription("Single-account game starter")]
-[assembly:AssemblyVersion("18.4.0.0")]
+[assembly:AssemblyVersion("18.0.0.0")]
+[assembly:AssemblyInformationalVersion("Run17 R18")]
 public static class MorbidLauncher {
  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h,int command);

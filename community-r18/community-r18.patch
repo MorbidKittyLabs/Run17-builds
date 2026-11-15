@@ -5891,7 +5891,7 @@ index 0000000..2519b75
 +};
 +} // namespace config_edit
 diff --git a/mods/src/version.h b/mods/src/version.h
-index 1f6c6bf..f330429 100644
+index 1f6c6bf..2c0e612 100644
 --- a/mods/src/version.h
 +++ b/mods/src/version.h
 @@ -16,12 +16,12 @@
@@ -5899,13 +5899,13 @@ index 1f6c6bf..f330429 100644
  #endif
 
 -#define VER_FILE_DESCRIPTION_STR    "Star Trek Fleet Command: Community Mod" VERSION_PATCH_STR
-+#define VER_FILE_DESCRIPTION_STR    "Morbid Kitty Labs: Community R18 Single Account"
++#define VER_FILE_DESCRIPTION_STR    "Morbid Kitty Labs: Run17 R18 Single Account"
 
  #define VER_FILE_VERSION            VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION, VERSION_PATCH
  #define VER_FILE_VERSION_STR        STRINGIFY(VERSION_MAJOR) "." STRINGIFY(VERSION_MINOR) "." STRINGIFY(VERSION_REVISION) "." STRINGIFY(VERSION_PATCH)
 
 -#define STFC_DISTRIBUTION_ID        "netniv.stfc-community-mod"
-+#define STFC_DISTRIBUTION_ID        "morbidkitty.community-r18"
++#define STFC_DISTRIBUTION_ID        "morbidkitty.run17-r18"
 
  #ifndef STFC_SOURCE_STATE_ID
  #define STFC_SOURCE_STATE_ID        "unknown"
@@ -5914,7 +5914,7 @@ index 1f6c6bf..f330429 100644
                                      ";channel=" STFC_BUILD_CHANNEL
 
 -#define VER_PRODUCTNAME_STR         "STFC: Community Mod"
-+#define VER_PRODUCTNAME_STR         "Morbid Kitty Labs: Community R18"
++#define VER_PRODUCTNAME_STR         "Morbid Kitty Labs: Run17 R18"
  #define VER_PRODUCT_VERSION         VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION
  #define VER_PRODUCT_VERSION_STR     VER_FILE_VERSION_STR
  #define VER_ORIGINAL_FILENAME_STR   "stfc-community-mod.dll"

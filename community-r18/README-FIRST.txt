@@ -1,4 +1,4 @@
-MORBID KITTY — STFC
+MORBID KITTY — RUN17 R18
 
 INSTALL
 1. Close Star Trek Fleet Command.

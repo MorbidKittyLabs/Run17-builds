@@ -1,4 +1,4 @@
-name: Build and scan Community R18
+name: Build and scan Morbid Kitty Run17 R18
 on:
   push:
     paths: ['community-r18/**', '.github/workflows/community-r18.yml']
@@ -181,7 +181,7 @@ jobs:
           name: Community-R18-Scanned
           path: |
             package/
-            STFC-Community-R18-Windows.zip
+            MorbidKitty-Run17-R18-Installer.zip
             Community-R18-Source.zip
             SHA256SUMS.txt
           if-no-files-found: error
@@ -215,4 +215,4 @@ jobs:
           export_tree=$(git write-tree)
           export_commit=$(printf '%s\n' 'STFC Community R18 clean source export' | git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit-tree "$export_tree")
           git push origin "$export_commit:refs/heads/community-r18-source-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" package/MorbidKitty-Setup.exe STFC-Community-R18-Windows.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png package/morbid-installer.png package/morbid-intro.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "Morbid Kitty — Run17 Build 18 Installer" --notes-file community-r18/RELEASE-NOTES.md --prerelease
+          gh release create "$tag" package/MorbidKitty-Setup.exe MorbidKitty-Run17-R18-Installer.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png package/morbid-installer.png package/morbid-intro.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "Morbid Kitty — Run17 R18 Installer" --notes-file community-r18/RELEASE-NOTES.md --prerelease

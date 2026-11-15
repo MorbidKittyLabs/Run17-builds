@@ -14,14 +14,15 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 [assembly:AssemblyTitle("Morbid Kitty STFC Setup")]
 [assembly:AssemblyDescription("Install Morbid Kitty for Star Trek Fleet Command")]
-[assembly:AssemblyVersion("18.5.0.0")]
+[assembly:AssemblyVersion("18.0.0.0")]
+[assembly:AssemblyInformationalVersion("Run17 R18")]
 
 [DataContract] public sealed class InstallRecord {
  [DataMember] public string RelativePath,OriginalBackup,InstalledHash;
  [DataMember] public bool HadOriginal;
 }
 [DataContract] public sealed class InstallManifest {
- [DataMember] public string GameDirectory,Shortcut,Version="Morbid Kitty R18";
+ [DataMember] public string GameDirectory,Shortcut,Version="Run17 R18";
  [DataMember] public string OriginalShortcutBackup;
  [DataMember] public bool HadOriginalShortcut;
  [DataMember] public List<InstallRecord> Files=new List<InstallRecord>();
@@ -80,7 +81,7 @@ public static class InstallerCore {
    Directory.CreateDirectory(desktop);CreateShortcut(manifest.Shortcut,Path.Combine(tools,"MorbidKitty-Launcher.exe"),tools,Path.Combine(tools,"MorbidKitty.ico"));
    Write(manifestPath,manifest);
    using(var key=Registry.CurrentUser.CreateSubKey(Key(game))){
-    key.SetValue("DisplayName","Morbid Kitty — STFC R18");key.SetValue("DisplayVersion","18.5");key.SetValue("Publisher","Morbid Kitty Labs");
+    key.SetValue("DisplayName","Morbid Kitty — Run17 R18");key.SetValue("DisplayVersion","Run17 R18");key.SetValue("Publisher","Morbid Kitty Labs");
     key.SetValue("InstallLocation",game);key.SetValue("DisplayIcon",Path.Combine(tools,"MorbidKitty.ico"));
     key.SetValue("UninstallString",GamePaths.Quote(Path.Combine(tools,"MorbidKitty-Uninstall.exe"))+" --uninstall --game "+GamePaths.Quote(game));key.SetValue("NoModify",1);key.SetValue("NoRepair",1);
    }
@@ -157,10 +158,10 @@ public sealed class SetupForm:Form {
  readonly bool remove;readonly string desktop;string game;readonly TextBox location;readonly Label status;readonly Button install;bool installed,removed,needsAdmin;
  public SetupForm(string chosen,string desktopDirectory,bool uninstall){
   game=chosen??GamePaths.Find();desktop=desktopDirectory;remove=uninstall;
-  Text=uninstall?"Remove Morbid Kitty":"Install Morbid Kitty — STFC";ClientSize=new Size(620,370);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
+  Text=uninstall?"Remove Morbid Kitty":"Install Morbid Kitty — Run17 R18";ClientSize=new Size(620,370);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
   BackColor=Color.FromArgb(6,51,79);ForeColor=Color.WhiteSmoke;Font=new Font("Tahoma",10);
-  var title=new Label{Text=uninstall?"Remove this community branch":"A little Morbid for your STFC",Font=new Font("Tahoma",18,FontStyle.Bold),Bounds=new Rectangle(24,22,570,34)};Controls.Add(title);
-  var explanation=new Label{Text=uninstall?"Restore the previous DLL and remove the installed shortcut and tools.":"Run17 Build 18 • One account • Diagnostics and manual shortcuts\nFull-screen Morbid Kitty intro, followed by the normal STFC loading screens.",Bounds=new Rectangle(26,70,568,55)};Controls.Add(explanation);
+  var title=new Label{Text=uninstall?"Remove Morbid Kitty — Run17 R18":"A little Morbid for your STFC",Font=new Font("Tahoma",18,FontStyle.Bold),Bounds=new Rectangle(24,22,570,34)};Controls.Add(title);
+  var explanation=new Label{Text=uninstall?"Restore the previous DLL and remove the installed shortcut and tools.":"Run17 R18 • One account • Diagnostics and manual shortcuts\nFull-screen Morbid Kitty intro, followed by the normal STFC loading screens.",Bounds=new Rectangle(26,70,568,55)};Controls.Add(explanation);
   Controls.Add(new Label{Text="STFC game folder",Bounds=new Rectangle(26,135,300,23)});
   location=new TextBox{ReadOnly=true,Text=game??"Choose Prime.exe to locate your game",Bounds=new Rectangle(26,161,467,29)};Controls.Add(location);
   var browse=new GameButton{Text="Browse…",Bounds=new Rectangle(500,159,93,32)};browse.Click+=(o,e)=>Browse();Controls.Add(browse);

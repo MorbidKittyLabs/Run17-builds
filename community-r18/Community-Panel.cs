@@ -13,7 +13,8 @@ using System.Reflection;
 using System.IO.MemoryMappedFiles;
 [assembly: AssemblyTitle("Morbid Kitty Controller")]
 [assembly: AssemblyDescription("Single-account clock, timers and manual shortcuts")]
-[assembly: AssemblyVersion("18.5.0.0")]
+[assembly: AssemblyVersion("18.0.0.0")]
+[assembly:AssemblyInformationalVersion("Run17 R18")]
 
 [DataContract] public sealed class AlarmState {
  [DataMember] public string Name="Timer";

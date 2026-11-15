@@ -1,4 +1,4 @@
-# Morbid Kitty — STFC
+# Morbid Kitty — Run17 R18
 
 **Close STFC, open MorbidKitty-Setup, and click INSTALL.** Then use the new Morbid Kitty desktop shortcut.
 
