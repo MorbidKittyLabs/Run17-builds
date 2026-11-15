@@ -40,7 +40,7 @@ jobs:
           g++ -std=c++23 -Wall -Wextra -Werror -Wno-unused-parameter -fsanitize=address,undefined -I community-r18/tests/hostile_fakes -I source/mods/src community-r18/tests/manual_attack_test.cc -o /tmp/manual-attack
           /tmp/manual-attack
           g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/settings_save_test.cc source/mods/src/toml_editor.cc source/mods/src/config_save.cc -ltomlplusplus -o /tmp/settings-save
-          g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/community_loading_test.cc source/mods/src/toml_editor.cc -ltomlplusplus -o /tmp/community-loading
+          g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/community_loading_test.cc source/mods/src/toml_editor.cc source/mods/src/config_save.cc -ltomlplusplus -o /tmp/community-loading
           /tmp/community-loading
           mkdir /tmp/settings-fixture
           /tmp/settings-save /tmp/settings-fixture
