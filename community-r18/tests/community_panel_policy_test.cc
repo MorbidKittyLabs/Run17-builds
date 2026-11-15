@@ -8,10 +8,11 @@ int main(){using namespace community_panel;
  assert(!Visible(false,true,true,false));assert(!Visible(true,false,true,false));
  assert(!Visible(true,true,false,false));assert(!Visible(true,true,true,true));
  assert(BlockingCanvas("gift_claim_canvas"));assert(BlockingCanvas("event_detail"));
- assert(BlockingCanvas("building_details"));assert(!BlockingCanvas("navigation_system"));
+ assert(!BlockingCanvas("building_details"));assert(!BlockingCanvas("ship_management"));assert(!BlockingCanvas("chat_canvas"));assert(!BlockingCanvas("navigation_system"));
  Bar bar;Manager manager;manager.fleets[2].Hull=&manager;
  assert(SelectAndLocate(2,&bar,&manager));assert(bar.count==1&&bar.index==2&&manager.viewed==1&&manager.last==2);
  assert(!SelectAndLocate(1,&bar,&manager));assert(!SelectAndLocate(-1,&bar,&manager));assert(!SelectAndLocate(8,&bar,&manager));
  assert(!SelectAndLocate(2,static_cast<Bar*>(nullptr),&manager));assert(!SelectAndLocate(2,&bar,static_cast<Manager*>(nullptr)));
  assert(bar.count==1&&manager.viewed==1);
+ assert(SelectAndLocate(2,&bar,&manager,0));assert(bar.index==0&&manager.last==2);
 }

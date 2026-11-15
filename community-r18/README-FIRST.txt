@@ -13,16 +13,19 @@ CONTROLS
 F8: bring the controller back.
 F9: switch between borderless play and the normal desktop window.
 F10: close STFC.
-Right-drag any controller button or the clock to move it.
-Right-click the small arrow at the game's right edge to show hidden controls.
-Red X by Morbid Kitty: hide controls. X by Store: close Store only.
-Purple X: close STFC and its companion windows.
-Ship buttons: click once to go to that ship.
+Right-drag anywhere on the controller to move it.
+Click the small green arrow at the game's right edge to show hidden controls.
+Purple X by Timers: hide controls. Red X by Diagnostics: close STFC.
+Red X by Store: close Store only.
+Numbers on the ship docks: click once to go to that ship.
 Tap F6: select and attack a nearby hostile. F7: recall eligible ships.
 Disk button / F12: save settings.
-Mic: open/focus chat and start Windows voice typing.
+Mic: open chat and Windows voice typing; press again to close both.
 Timers: six named reminders with days, hours, minutes and seconds.
 Close the timer window to return to the game; reminders keep running.
+Drag its background to move it, or right-drag anywhere on it.
+Finished timer names appear over the game until their red X is clicked.
+A chirp and “Program complete” announce each finish, one at a time.
 
 TROUBLESHOOTING
 Click Diagnostics to collect a ZIP on your Desktop. Nothing is sent automatically.
@@ -33,4 +36,7 @@ CREDITS
 Built on STFC Community Mod by NetNiV and contributors: https://github.com/STFC-Mod/mod
 Settings-saving contributions from Guffawaffle/stfc-mod: https://github.com/Guffawaffle/stfc-mod
 Morbid Kitty additions by Morbid Kitty Labs.
+Star Trek computer voice: Majel Barrett; clip from MediaCollege.com.
+Computer chirp: Star Trek Dimension — https://www.stdimension.org/MediaLib/computere.htm
 GPL-3.0 — see LICENSE. Corresponding source accompanies the build.
+Star Trek audio remains the property of its respective rights holders.

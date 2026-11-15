@@ -31,7 +31,7 @@ using Microsoft.Win32;
 }
 public static class InstallerCore {
  public const string ShortcutName="Morbid Kitty - Star Trek Fleet Command.lnk";
- static readonly string[] Allowed={"version.dll","Community-Panel.exe","MorbidKitty-Launcher.exe","MorbidKitty-Uninstall.exe","MorbidKitty-Splash.png","MorbidKitty.ico","Collect-Diagnostics.ps1","Collect-Diagnostics.bat","README-FIRST.txt","DIAGNOSTICS.md","LICENSE","community_patch_settings.example.toml"};
+ static readonly string[] Allowed={"version.dll","Community-Panel.exe","MorbidKitty-Launcher.exe","MorbidKitty-Uninstall.exe","MorbidKitty-Splash.png","MorbidKitty.ico","Timer-Complete.wav","Collect-Diagnostics.ps1","Collect-Diagnostics.bat","README-FIRST.txt","DIAGNOSTICS.md","LICENSE","community_patch_settings.example.toml"};
  public static T Read<T>(string path){using(var f=File.OpenRead(path))return (T)new DataContractJsonSerializer(typeof(T)).ReadObject(f);}
  public static void Write<T>(string path,T value){Directory.CreateDirectory(Path.GetDirectoryName(path));string temp=path+".tmp";using(var f=File.Create(temp))new DataContractJsonSerializer(typeof(T)).WriteObject(f,value);if(File.Exists(path))File.Replace(temp,path,null);else File.Move(temp,path);}
  static string Sha(byte[] data){using(var h=SHA256.Create())return BitConverter.ToString(h.ComputeHash(data)).Replace("-","").ToLowerInvariant();}

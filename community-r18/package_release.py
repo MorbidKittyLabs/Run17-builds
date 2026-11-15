@@ -1,7 +1,7 @@
 from pathlib import Path
 import hashlib,json,os,shutil,sys,zipfile
 root=Path(__file__).resolve().parent;package=Path('package')
-RUNTIME=['version.dll','Community-Panel.exe','MorbidKitty-Launcher.exe','MorbidKitty-Uninstall.exe','MorbidKitty-Splash.png','MorbidKitty.ico','Collect-Diagnostics.ps1','Collect-Diagnostics.bat','README-FIRST.txt','DIAGNOSTICS.md','LICENSE','community_patch_settings.example.toml']
+RUNTIME=['version.dll','Community-Panel.exe','MorbidKitty-Launcher.exe','MorbidKitty-Uninstall.exe','MorbidKitty-Splash.png','MorbidKitty.ico','Timer-Complete.wav','Collect-Diagnostics.ps1','Collect-Diagnostics.bat','README-FIRST.txt','DIAGNOSTICS.md','LICENSE','community_patch_settings.example.toml']
 mode=sys.argv[1] if len(sys.argv)>1 else 'stage'
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 if mode=='stage':
@@ -11,7 +11,7 @@ if mode=='stage':
  shutil.copyfile(dll,package/'version.dll')
  for name in RUNTIME:
   if name=='version.dll':continue
-  src=Path('source/example_community_patch_settings_en.toml') if name.endswith('.example.toml') else root/'assets'/name if name.endswith(('.png','.ico')) else root/name
+  src=Path('source/example_community_patch_settings_en.toml') if name.endswith('.example.toml') else root/'assets'/name if name.endswith(('.png','.ico','.wav')) else root/name
   shutil.copyfile(src,package/name)
  manifest={'Files':[{'Key':name,'Value':sha(package/name)} for name in RUNTIME]}
  with zipfile.ZipFile(root/'payload.zip','w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
@@ -19,7 +19,7 @@ if mode=='stage':
   z.writestr('PACKAGE-MANIFEST.json',json.dumps(manifest))
 elif mode=='installer':
  shutil.copyfile(root/'MorbidKitty-Setup.exe',package/'MorbidKitty-Setup.exe')
- for name in ['community-panel.png','community-timers.png','morbid-intro.png','morbid-installer.png','panel-validation.txt','installer-validation.txt']:
+ for name in ['community-panel.png','timer-alert.png','community-timers.png','morbid-intro.png','morbid-installer.png','panel-validation.txt','installer-validation.txt']:
   shutil.copyfile(Path('ui-evidence')/name,package/name)
  (package/'BUILD-INFO.json').write_text(json.dumps({'build':'Run17 Build18 Community Installer','source_commit':os.environ['GITHUB_SHA'],'upstream_commit':'37e33084b711499c1ae3cc1988b58400c097546f','run_id':os.environ['GITHUB_RUN_ID'],'platform':'Windows x64','scan_status':'pending','live_game_validation':'required'},indent=2)+'\n')
 elif mode=='complete':

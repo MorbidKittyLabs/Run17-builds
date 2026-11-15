@@ -11,14 +11,19 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 public static class BeveledFace {
- public static GraphicsPath Shape(Rectangle bounds,int radius){var p=new GraphicsPath();int d=Math.Min(radius*2,Math.Min(bounds.Width,bounds.Height));if(d<=0)return p;p.AddArc(bounds.Left,bounds.Top,d,d,180,90);p.AddArc(bounds.Right-d,bounds.Top,d,d,270,90);p.AddArc(bounds.Right-d,bounds.Bottom-d,d,d,0,90);p.AddArc(bounds.Left,bounds.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
- public static void Paint(Graphics g,Rectangle area,string text,Font font,Color foreground,Color top,Color bottom){if(area.Width<5||area.Height<5)return;g.SmoothingMode=SmoothingMode.AntiAlias;var outer=new Rectangle(1,1,area.Width-3,area.Height-3);using(var path=Shape(outer,5))using(var brush=new LinearGradientBrush(area,top,bottom,LinearGradientMode.Vertical)){g.FillPath(brush,path);using(var pen=new Pen(Color.FromArgb(3,39,61),2))g.DrawPath(pen,path);}var inner=new Rectangle(3,3,area.Width-7,area.Height-7);using(var path=Shape(inner,3))using(var pen=new Pen(Color.FromArgb(158,217,236)))g.DrawPath(pen,path);TextRenderer.DrawText(g,text,font,area,foreground,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}
+ public static GraphicsPath Shape(Rectangle bounds,int radius){return Shape(bounds,radius,true,true);}
+ public static GraphicsPath Shape(Rectangle bounds,int radius,bool roundLeft,bool roundRight){var p=new GraphicsPath();int d=Math.Min(radius*2,Math.Min(bounds.Width,bounds.Height));if(d<=0)return p;if(roundLeft)p.AddArc(bounds.Left,bounds.Top,d,d,180,90);else p.AddLine(bounds.Left,bounds.Top,bounds.Left,bounds.Top);if(roundRight){p.AddArc(bounds.Right-d,bounds.Top,d,d,270,90);p.AddArc(bounds.Right-d,bounds.Bottom-d,d,d,0,90);}else p.AddLine(bounds.Right,bounds.Top,bounds.Right,bounds.Bottom);if(roundLeft)p.AddArc(bounds.Left,bounds.Bottom-d,d,d,90,90);else p.AddLine(bounds.Left,bounds.Bottom,bounds.Left,bounds.Top);p.CloseFigure();return p;}
+ public static void Paint(Graphics g,Rectangle area,string text,Font font,Color foreground,Color top,Color bottom,bool joinLeft=false,bool joinRight=false){if(area.Width<5||area.Height<5)return;g.SmoothingMode=SmoothingMode.AntiAlias;var outer=new Rectangle(1,1,area.Width-3,area.Height-3);using(var path=Shape(outer,5,!joinLeft,!joinRight))using(var brush=new LinearGradientBrush(area,top,bottom,LinearGradientMode.Vertical)){g.FillPath(brush,path);using(var pen=new Pen(Color.FromArgb(3,39,61),2))g.DrawPath(pen,path);}var inner=new Rectangle(3,3,area.Width-7,area.Height-7);using(var path=Shape(inner,3,!joinLeft,!joinRight))using(var pen=new Pen(Color.FromArgb(158,217,236)))g.DrawPath(pen,path);TextRenderer.DrawText(g,text,font,area,foreground,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}
 }
 public class GameButton:Button {
  public Color TopColor=Color.FromArgb(26,155,211),BottomColor=Color.FromArgb(7,82,127);
+ bool joinLeft,joinRight;
+ public bool JoinLeft{get{return joinLeft;}set{joinLeft=value;UpdateShape();Invalidate();}}
+ public bool JoinRight{get{return joinRight;}set{joinRight=value;UpdateShape();Invalidate();}}
+ void UpdateShape(){if(Width>1&&Height>1)using(var path=BeveledFace.Shape(ClientRectangle,5,!joinLeft,!joinRight)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
  public GameButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;TabStop=false;UseVisualStyleBackColor=false;ForeColor=Color.FromArgb(244,252,255);}
- protected override void OnResize(EventArgs e){base.OnResize(e);if(Width>1&&Height>1)using(var path=BeveledFace.Shape(ClientRectangle,5)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
- protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,Enabled?ForeColor:Color.Silver,Enabled?TopColor:Color.FromArgb(67,90,105),Enabled?BottomColor:Color.FromArgb(35,51,62));}
+ protected override void OnResize(EventArgs e){base.OnResize(e);UpdateShape();}
+ protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,Enabled?ForeColor:Color.Silver,Enabled?TopColor:Color.FromArgb(67,90,105),Enabled?BottomColor:Color.FromArgb(35,51,62),joinLeft,joinRight);}
 }
 public sealed class GameClock:Label {
  public GameClock(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}

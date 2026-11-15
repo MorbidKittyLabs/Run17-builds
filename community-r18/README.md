@@ -2,7 +2,7 @@
 
 **Close STFC, open MorbidKitty-Setup, and click INSTALL.** Then use the new Morbid Kitty desktop shortcut.
 
-A brief Morbid Kitty intro leads into Community Mod's own loading artwork. The compact controller has ship shortcuts, a clock, six named timers, Store, voice typing, Save Settings and Diagnostics.
+A brief Morbid Kitty intro leads into Community Mod's own loading artwork. The compact controller has a clock, six named timers, Store, voice typing, Save Settings and Diagnostics. Numbered shortcuts sit on the visible ship docks.
 
 **F8 brings the controller back. F9 switches borderless/windowed play.** Right-drag the controls to move them.
 
