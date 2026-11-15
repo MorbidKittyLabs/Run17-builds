@@ -1,4 +1,4 @@
-MORBID KITTY — STFC COMMUNITY
+MORBID KITTY — STFC
 
 INSTALL
 1. Close Star Trek Fleet Command.
@@ -7,7 +7,7 @@ INSTALL
 4. Start the game using the new Morbid Kitty desktop shortcut.
 
 The full-screen Morbid Kitty intro stays until the game window settles into place,
-then reveals Community Mod's loading screen.
+then reveals STFC's normal loading screen.
 Your existing game settings are kept.
 
 CONTROLS

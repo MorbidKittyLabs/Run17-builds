@@ -21,7 +21,7 @@ elif mode=='installer':
  shutil.copyfile(root/'MorbidKitty-Setup.exe',package/'MorbidKitty-Setup.exe')
  for name in ['community-panel.png','timer-alert.png','community-timers.png','morbid-intro.png','morbid-installer.png','panel-validation.txt','installer-validation.txt']:
   shutil.copyfile(Path('ui-evidence')/name,package/name)
- (package/'BUILD-INFO.json').write_text(json.dumps({'build':'Run17 Build18 Community Installer','source_commit':os.environ['GITHUB_SHA'],'upstream_commit':'37e33084b711499c1ae3cc1988b58400c097546f','run_id':os.environ['GITHUB_RUN_ID'],'platform':'Windows x64','scan_status':'pending','live_game_validation':'required'},indent=2)+'\n')
+ (package/'BUILD-INFO.json').write_text(json.dumps({'build':'Morbid Kitty R18 Installer','source_commit':os.environ['GITHUB_SHA'],'upstream_commit':'37e33084b711499c1ae3cc1988b58400c097546f','run_id':os.environ['GITHUB_RUN_ID'],'platform':'Windows x64','scan_status':'pending','live_game_validation':'required'},indent=2)+'\n')
 elif mode=='complete':
  info=json.loads((package/'BUILD-INFO.json').read_text());info['scan_status']='Defender and ClamAV completed without detections; see reports'
  (package/'BUILD-INFO.json').write_text(json.dumps(info,indent=2)+'\n')

@@ -19,7 +19,7 @@ jobs:
           ref: 37e33084b711499c1ae3cc1988b58400c097546f
           path: source
       - run: python3 community-r18/prepare_source.py source
-      - name: Verify current Community Mod loading artwork and credit
+      - name: Verify preserved upstream artwork and source credit
         run: |
           test "$(git -C source hash-object assets/loadingscreen.png)" = "48f38d6ed1dab26a2dd02cb9605792df7779c7fe"
           test "$(git -C source hash-object assets/stfc-mod-logo.png)" = "5dc641f0fbff42cadbd930a8ba593baecd2f8073"

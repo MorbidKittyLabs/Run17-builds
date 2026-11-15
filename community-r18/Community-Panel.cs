@@ -11,7 +11,7 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Reflection;
 using System.IO.MemoryMappedFiles;
-[assembly: AssemblyTitle("STFC Community Panel")]
+[assembly: AssemblyTitle("Morbid Kitty Controller")]
 [assembly: AssemblyDescription("Single-account clock, timers and manual shortcuts")]
 [assembly: AssemblyVersion("18.5.0.0")]
 
@@ -490,6 +490,6 @@ public sealed class CommunityPanel:Form {
     }
    }
    return 0;
-  }catch(Exception ex){if(args.Length>0){File.WriteAllText("panel-error.txt",ex.ToString());}else MessageBox.Show(ex.Message,"STFC Community Panel");return 1;}
+  }catch(Exception ex){if(args.Length>0){File.WriteAllText("panel-error.txt",ex.ToString());}else MessageBox.Show(ex.Message,"Morbid Kitty Controller");return 1;}
  }
 }

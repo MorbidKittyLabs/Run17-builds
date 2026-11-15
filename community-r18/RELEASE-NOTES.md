@@ -1,4 +1,4 @@
-# Morbid Kitty — STFC Community
+# Morbid Kitty — STFC
 
 Open **MorbidKitty-Setup** and click **INSTALL**, then launch from the Morbid Kitty desktop shortcut.
 

@@ -1,5 +1,5 @@
 diff --git a/example_community_patch_settings_en.toml b/example_community_patch_settings_en.toml
-index 33c835d..eb18b57 100644
+index 33c835d..a079286 100644
 --- a/example_community_patch_settings_en.toml
 +++ b/example_community_patch_settings_en.toml
 @@ -146,7 +146,7 @@ fr_scale = 2.0
@@ -20,6 +20,28 @@ index 33c835d..eb18b57 100644
 
  # Subgroup: Fleet Labels
  # ----------------------
+@@ -196,7 +196,7 @@ system_pan_momentum_falloff = 0.8
+ # ----------------
+
+ # Set to true to use the loader_image for the loading screen
+-loader_enabled = true
++loader_enabled = false
+
+ # Path to the custom loading screen image (leave blank for embedded image)
+ loader_image = ""
+@@ -205,10 +205,10 @@ loader_image = ""
+ loader_logo_scale = 1.0
+
+ # Show the custom tip on the loading screen
+-loader_tip_enabled = true
++loader_tip_enabled = false
+
+ # Set to true to use the loader image for the transition screen
+-loader_transition = true
++loader_transition = false
+
+ # Use a black background instead of the custom image during transitions
+ loader_transition_black = false
 @@ -235,7 +235,7 @@ use_presets_as_default = true
  # --------------
 
@@ -285,7 +307,7 @@ index 0000000..f68c06c
 +}
 diff --git a/mods/src/community_loading_policy.h b/mods/src/community_loading_policy.h
 new file mode 100644
-index 0000000..93b4527
+index 0000000..0a49662
 --- /dev/null
 +++ b/mods/src/community_loading_policy.h
 @@ -0,0 +1,30 @@
@@ -299,14 +321,14 @@ index 0000000..93b4527
 +inline std::string Restore(const std::string& original) {
 + using namespace config_edit;
 + const auto before=toml::parse(original);
-+ if(before["community_saved"]["community_loading_restored"].value_or(false))return original;
++ if(before["community_saved"]["morbid_native_loading_v1"].value_or(false))return original;
 + struct Setting {const char* section;const char* key;Value value;};
 + const std::vector<Setting> settings={
-+  {"graphics","loader_enabled",true},{"graphics","loader_transition",true},
-+  {"graphics","loader_transition_black",false},{"graphics","loader_tip_enabled",true},
++  {"graphics","loader_enabled",false},{"graphics","loader_transition",false},
++  {"graphics","loader_transition_black",true},{"graphics","loader_tip_enabled",false},
 +  {"graphics","loader_image",std::string{}},{"graphics","loader_logo_scale",1.0},
 +  {"patches","loadingscreenhooks",true},{"patches","transitionscreenhooks",true},
-+  {"patches","loadingtiphooks",true},{"community_saved","community_loading_restored",true}
++  {"patches","loadingtiphooks",true},{"community_saved","morbid_native_loading_v1",true}
 + };
 + std::string current=original;TomlEditor editor;
 + for(const auto& setting:settings){
@@ -777,7 +799,7 @@ index 0000000..7c9621d
 + return false;
 +}
 diff --git a/mods/src/config.cc b/mods/src/config.cc
-index 8102a74..13dcedb 100644
+index 8102a74..1c5d34a 100644
 --- a/mods/src/config.cc
 +++ b/mods/src/config.cc
 @@ -1,4 +1,7 @@
@@ -808,17 +830,17 @@ index 8102a74..13dcedb 100644
    bool        write_config = false;
    bool        write_log    = true;
    try {
-+    // Restore only inherited loading-screen overrides, once per configuration.
++    // Restore native STFC loading visuals once, including previous branded-loading settings.
 +    // The transactional editor preserves unrelated settings and comments.
 +    try {
 +      const auto path=std::filesystem::path(std::string(File::MakePath(filename)));
 +      if(std::filesystem::exists(path)){
 +        const auto original=ReadConfigText(path);const auto restored=community_loading::Restore(original);
-+        if(restored!=original){auto backup=path;backup+=".before-community-loading.bak";ReplaceConfigText(backup,original);
-+          if(!ReplaceConfigText(path,restored,original))throw std::runtime_error("Configuration changed during loading-art restoration");
-+          spdlog::info("[CommunityLoading] Restored upstream artwork, logos, loading tips and hook switches; unrelated settings preserved");}
++        if(restored!=original){auto backup=path;backup+=".before-native-loading.bak";ReplaceConfigText(backup,original);
++          if(!ReplaceConfigText(path,restored,original))throw std::runtime_error("Configuration changed during native loading restoration");
++          spdlog::info("[MorbidLoading] Restored native STFC loading visuals and tips; unrelated settings preserved");}
 +      }
-+    }catch(const std::exception& e){spdlog::warn("[CommunityLoading] Could not restore loading settings: {}",e.what());}
++    }catch(const std::exception& e){spdlog::warn("[MorbidLoading] Could not restore loading settings: {}",e.what());}
      config       = std::move(toml::parse_file(File::MakePath(filename)));
      write_config = true;
    } catch (const toml::parse_error& e) {
@@ -1070,7 +1092,7 @@ index 0000000..8e87aa8
 +bool ReplaceConfigText(const std::filesystem::path& path, std::string_view text,
 +                       std::optional<std::string_view> expected = std::nullopt);
 diff --git a/mods/src/defaultconfig.h b/mods/src/defaultconfig.h
-index 5849871..51f0612 100644
+index 5849871..5405896 100644
 --- a/mods/src/defaultconfig.h
 +++ b/mods/src/defaultconfig.h
 @@ -45,7 +45,7 @@ namespace Graphics
@@ -1082,7 +1104,7 @@ index 5849871..51f0612 100644
    constexpr bool        free_resize                     = true;
    constexpr auto        keyboard_zoom_speed             = 350;
    constexpr auto        system_pan_momentum_falloff     = 0.8;
-@@ -56,10 +56,10 @@ namespace Graphics
+@@ -56,17 +56,17 @@ namespace Graphics
    constexpr auto        system_zoom_preset_4            = 2750;
    constexpr auto        system_zoom_preset_5            = 5000;
    constexpr auto        transition_time                 = 0.01;
@@ -1095,6 +1117,24 @@ index 5849871..51f0612 100644
    constexpr bool        use_presets_as_default          = true;
    constexpr auto        zoom                            = 5000;
    constexpr auto        haven_zoom                      = 4000.0;
+   constexpr auto        interior_zoom_scale             = 2.0; // station-interior zoom-out multiplier; 1.0 = native
+   constexpr auto        fr_scale                        = 2.0;
+-  constexpr bool        loader_enabled                  = true; // replace LoginSequence background
+-  constexpr bool        loader_transition               = true; // replace TVC/SlideShow backgrounds
++  constexpr bool        loader_enabled                  = false; // retain native STFC loading background
++  constexpr bool        loader_transition               = false; // retain native STFC transitions
+ #ifdef _USE_ORIGINAL_BG
+   constexpr bool loader_transition_black = true; // original BG mode: use black transition
+ #else
+@@ -74,7 +74,7 @@ namespace Graphics
+ #endif
+   constexpr const char* loader_image       = "";   // Empty = use embedded fallback
+   constexpr auto        loader_logo_scale  = 1.0;  // multiplier for logo size
+-  constexpr bool        loader_tip_enabled = true; // show custom tip on loading screen
++  constexpr bool        loader_tip_enabled = false; // retain native STFC tips
+ } // namespace Graphics
+
+ namespace Patches
 @@ -125,6 +125,9 @@ namespace Shortcuts
    constexpr const char* action_queue         = "SPACE|MOUSE1";
    constexpr const char* action_queue_clear   = "CTRL-C";
