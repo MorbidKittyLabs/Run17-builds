@@ -1,12 +1,15 @@
-A single-account Windows test build with the optional compact control panel.
+**Download `MorbidKitty-Setup.exe`, open it, and click INSTALL.** No manual DLL swapping is needed.
 
-**Download `STFC-Community-R18-Windows.zip` below.** It includes the DLL, panel, log collector, install notes, license, previews and scan reports. The game can run without the panel.
+The installer finds the game or lets you select `Prime.exe`, backs up the previous DLL, preserves existing settings, installs the launcher/diagnostic tools, and creates the Morbid Kitty desktop shortcut. Removal restores the backed-up DLL and preserves personal settings/logs.
 
-- Clock, four persistent reminder timers, Store, Windows voice typing, verified Save Settings, Diagnostics and ship buttons 1–8.
-- F6: one manual select-and-attack request. F7: recall this account's eligible ships. F12: save local settings.
-- R18 diagnostics for patch startup/errors/crashes, mining-node views, targets, pursuit, all observed docks, cargo/mining/timing, queues and screen/station contexts.
-- Occupied-node cargo/treasure and ship-strength views retain native Scan/Attack. **Returning to the mining-node card remains unresolved.**
+- Existing Morbid Kitty/Teddy/spaceship artwork and desktop logo; one three-second intro per new game process, then normal loading continues.
+- Vertical blue HUD panel: clock, four saved reminders, Store, Windows voice typing, verified Save, Diagnostics and ship buttons 1–8.
+- Panel follows map/base HUD visibility and remembers its moved position.
+- F6: one select-and-attack request. F7: eligible own ships recall. F12: save local settings.
+- Diagnostic tools and source remain included for troubleshooting/development. Click Diagnostics on the panel or run `Collect-Diagnostics.bat`; nothing is uploaded.
+- README and DIAGNOSTICS.md document the features, every diagnostic category, unavailable/unverified values, collection scope and privacy considerations.
+- Occupied-node cargo/treasure and strength views retain native Scan/Attack. **Returning to the mining-node card remains unresolved.**
 
-Fresh Windows build; automatic regression checks; native Microsoft Defender and ClamAV scans; SHA-256 checksums. Passing scans does not guarantee every antivirus will agree. Live in-game behavior still needs verification.
+Compiled tools and DLL; installer rollback/update/removal and shortcut checks; rendered UI checks; Microsoft Defender and ClamAV reports; SHA-256 checksums. This is an unsigned test release, and live game/HUD verification is still needed. Clean scans do not guarantee every antivirus will agree.
 
-Corresponding clean source is in `Community-R18-Source.zip`, based on [STFC-Mod/mod](https://github.com/STFC-Mod/mod) at `37e33084b711499c1ae3cc1988b58400c097546f` (GPL-3.0).
+Based on [NetNiV's STFC Community Mod](https://github.com/STFC-Mod/mod) at `37e33084b711499c1ae3cc1988b58400c097546f` (GPL-3.0). Corresponding source is provided in `Community-R18-Source.zip`.

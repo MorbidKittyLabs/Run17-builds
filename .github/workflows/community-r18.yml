@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y libtomlplusplus-dev
-          for test_name in fleet_readings_policy pursuit_observer tactical_policy station_observer target_audit_policy; do
+          for test_name in fleet_readings_policy pursuit_observer tactical_policy station_observer target_audit_policy community_panel_policy; do
             g++ -std=c++23 -Wall -Wextra -Werror -fsanitize=address,undefined -I source/mods/src community-r18/tests/${test_name}_test.cc -o /tmp/${test_name}
             /tmp/${test_name}
           done
@@ -69,17 +69,24 @@ jobs:
         with:
           path: ${{ steps.cache-path.outputs.dir }}
           key: community-windows-xmake-3.1.0-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock') }}
-      - name: Build and render optional single-account panel
-        timeout-minutes: 3
+      - name: Build tools and render the vertical panel and brief intro
+        timeout-minutes: 4
         shell: pwsh
         run: |
           $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          $panelSource=Join-Path $env:GITHUB_WORKSPACE 'community-r18/Community-Panel.cs'
-          $panelOutput=Join-Path $env:GITHUB_WORKSPACE 'community-r18/Community-Panel.exe'
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll ('/out:'+$panelOutput) $panelSource
+          $toolRoot=Join-Path $env:GITHUB_WORKSPACE 'community-r18'
+          $common=Join-Path $toolRoot 'Community-Common.cs'
+          $icon=Join-Path $toolRoot 'assets/MorbidKitty.ico'
+          Copy-Item (Join-Path $toolRoot 'assets/*') $toolRoot
+          $refs=@('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Runtime.Serialization.dll','/r:System.IO.Compression.dll','/r:System.IO.Compression.FileSystem.dll')
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'Community-Panel.exe')) $common (Join-Path $toolRoot 'Community-Panel.cs')
           if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
-          $proc=Start-Process -FilePath $panelOutput -PassThru -Wait -ArgumentList @('--verify-ui','ui-evidence')
-          if ($proc.ExitCode -ne 0) { throw 'Panel rendering or persistence validation failed' }
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'MorbidKitty-Launcher.exe')) $common (Join-Path $toolRoot 'MorbidKitty-Launcher.cs')
+          if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed' }
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /define:UNINSTALL_ENTRY @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'MorbidKitty-Uninstall.exe')) $common (Join-Path $toolRoot 'MorbidKitty-Setup.cs')
+          if ($LASTEXITCODE -ne 0) { throw 'Uninstaller build failed' }
+          $proc=Start-Process -FilePath (Join-Path $toolRoot 'Community-Panel.exe') -PassThru -Wait -ArgumentList @('--verify-ui','ui-evidence')
+          if ($proc.ExitCode -ne 0) { throw 'Panel/intro validation failed' }
       - name: Stamp source and configure Windows dependencies
         working-directory: source
         shell: pwsh
@@ -99,10 +106,20 @@ jobs:
         run: |
           xmake build -y -v stfc-community-mod
           if ($LASTEXITCODE -ne 0) { throw 'DLL build failed' }
-      - name: Package and audit compiled files
+      - name: Build one-file setup and verify installation, rollback and removal
+        timeout-minutes: 5
         shell: pwsh
         run: |
-          python community-r18/package_release.py
+          python community-r18/package_release.py stage
+          if ($LASTEXITCODE -ne 0) { throw 'Payload packaging failed' }
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          $toolRoot=Join-Path $env:GITHUB_WORKSPACE 'community-r18'
+          $refs=@('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Runtime.Serialization.dll','/r:System.IO.Compression.dll','/r:System.IO.Compression.FileSystem.dll')
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ @refs ('/win32icon:'+(Join-Path $toolRoot 'assets/MorbidKitty.ico')) ('/resource:'+(Join-Path $toolRoot 'payload.zip')+',Payload') ('/out:'+(Join-Path $toolRoot 'MorbidKitty-Setup.exe')) (Join-Path $toolRoot 'Community-Common.cs') (Join-Path $toolRoot 'MorbidKitty-Setup.cs')
+          if ($LASTEXITCODE -ne 0) { throw 'Setup build failed' }
+          $test=Start-Process -FilePath (Join-Path $toolRoot 'MorbidKitty-Setup.exe') -PassThru -Wait -ArgumentList @('--self-test','ui-evidence')
+          if ($test.ExitCode -ne 0) { throw 'Installer validation failed' }
+          python community-r18/package_release.py installer
           python community-r18/verify_export.py package --binary
           if ($LASTEXITCODE -ne 0) { throw 'Export audit failed' }
       - name: Update Microsoft Defender and scan the complete package
@@ -119,9 +136,14 @@ jobs:
         if: always()
         with:
           name: Community-R18-UI-Evidence
-          path: ui-evidence/
+          path: |
+            ui-evidence/*.png
+            ui-evidence/*validation.txt
+            panel-error.txt
+            installer-error.txt
           if-no-files-found: ignore
   publish:
+    if: github.ref == 'refs/heads/main'
     needs: windows
     runs-on: ubuntu-latest
     permissions:
@@ -145,7 +167,7 @@ jobs:
           sudo systemctl stop clamav-freshclam.service || true
           sudo freshclam
           clamscan --version | tee package/ClamAV-Scan.txt
-          sha256sum package/version.dll package/Community-Panel.exe | tee -a package/ClamAV-Scan.txt
+          sha256sum package/version.dll package/Community-Panel.exe package/MorbidKitty-Setup.exe | tee -a package/ClamAV-Scan.txt
           clamscan --recursive --verbose --allmatch --max-filesize=200M --max-scansize=500M package/ Community-R18-Source.zip | tee -a package/ClamAV-Scan.txt
           python3 community-r18/package_release.py complete
       - name: Publish scanned downloads
@@ -156,7 +178,9 @@ jobs:
           export_root="$RUNNER_TEMP/community-r18-public-source"
           mkdir -p "$export_root/.github/workflows"
           cp -a community-r18 "$export_root/community-r18"
-          cp community-r18/README.md "$export_root/README.md"
+          download_base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
+          sed "s|RELEASE_DOWNLOAD_BASE|$download_base|g" community-r18/README.md > "$export_root/README.md"
+          sed "s|RELEASE_DOWNLOAD_BASE|$download_base|g" community-r18/README.md > "$export_root/community-r18/README.md"
           cp community-r18/LICENSE "$export_root/LICENSE"
           cp .github/workflows/community-r18.yml "$export_root/.github/workflows/community-r18.yml"
           export GIT_INDEX_FILE="$RUNNER_TEMP/community-r18-export.index"
@@ -165,4 +189,4 @@ jobs:
           export_tree=$(git write-tree)
           export_commit=$(printf '%s\n' 'STFC Community R18 clean source export' | git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit-tree "$export_tree")
           git push origin "$export_commit:refs/heads/community-r18-source-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" STFC-Community-R18-Windows.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "STFC Community R18 — Single Account" --notes-file community-r18/RELEASE-NOTES.md --prerelease
+          gh release create "$tag" package/MorbidKitty-Setup.exe STFC-Community-R18-Windows.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png package/morbid-installer.png package/morbid-intro.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "Morbid Kitty — Run17 Build 18 Installer" --notes-file community-r18/RELEASE-NOTES.md --prerelease

@@ -1,11 +1,15 @@
-# STFC Community R18
+# Morbid Kitty — Run17 Build 18
 
-A single-account Windows build with diagnostics, the occupied-miner cargo/strength toggle, F6 single attack, F7 recall, and an optional compact clock/timer panel.
+[![INSTALL](https://img.shields.io/badge/INSTALL-Morbid_Kitty-149BD3?style=for-the-badge)](RELEASE_DOWNLOAD_BASE/MorbidKitty-Setup.exe)
 
-The panel includes Store, Windows voice typing, verified settings saving, diagnostic collection and ship buttons 1–8. Every gameplay action requires a manual input.
+**Open the installer, then click INSTALL.** It finds STFC or lets you browse to `Prime.exe`, backs up/replaces the DLL, installs the tools, preserves existing settings, and creates the Morbid Kitty desktop shortcut.
 
-The mining-node return view is still unresolved. Native Scan/Attack controls remain available. This is a test build; live game behavior needs verification.
+A three-second Morbid Kitty-and-Teddy intro closes automatically, followed by the normal loading screens. The vertical blue HUD panel includes the clock, four saved reminders, Store, Windows voice typing, verified Save Settings, Diagnostics and ship buttons 1–8. F6 makes one select-and-attack request; F7 recalls this account's eligible ships.
 
-Download the **Community R18** release ZIP from [Releases](https://github.com/MorbidKittyLabs/Run17-builds/releases). Each release includes Defender and ClamAV reports, SHA-256 checksums, and the corresponding clean source.
+Troubleshooting tools and their source are included. Click **Diag** on the HUD panel or run `Collect-Diagnostics.bat` to create a local diagnostic ZIP for review; nothing is uploaded.
 
-Based on [STFC-Mod/mod](https://github.com/STFC-Mod/mod), pinned at `37e33084b711499c1ae3cc1988b58400c097546f`, under GPL-3.0. Build changes are contained in `community-r18.patch`.
+Read [the installation and feature guide](community-r18/README-FIRST.txt) and [the complete diagnostic coverage and privacy guide](community-r18/DIAGNOSTICS.md).
+
+The mining-node return view remains unresolved. HUD positioning/visibility and gameplay behavior need live verification on your client and UI scale.
+
+Built on [NetNiV's STFC Community Mod](https://github.com/STFC-Mod/mod), pinned at `37e33084b711499c1ae3cc1988b58400c097546f`. GPL-3.0; source, Defender/ClamAV reports and checksums are release assets. Morbid Kitty branding is a brief startup introduction, not a replacement for the Community Mod's loading artwork or credits.

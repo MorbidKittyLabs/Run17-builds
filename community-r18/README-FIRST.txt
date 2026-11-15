@@ -1,57 +1,74 @@
-STFC Community R18 — Single Account
-Morbid Kitty Labs | Windows x64 | Community Mod extension
+MORBID KITTY — RUN17 BUILD 18 COMMUNITY BRANCH
+Built on NetNiV's STFC Community Mod (STFC-Mod/mod).
+Windows x64 | One account | Morbid Kitty Labs
 
 INSTALL
-1. Close STFC.
-2. Back up the existing version.dll beside Prime.exe.
-3. Copy version.dll, Community-Panel.exe and Collect-Diagnostics.ps1 into that folder.
-4. Open STFC normally. Open Community-Panel.exe when you want the optional panel.
-The game also works without the panel. Closing the panel leaves STFC running.
-Keep your existing community_patch_settings.toml. The included example is a reference.
-Do not install the PDB or source archive to play.
+1. Open MorbidKitty-Setup.exe.
+2. The setup window finds the game folder. If needed, click Browse and choose Prime.exe beside GameAssembly.dll.
+3. Close STFC and click INSTALL.
+Setup backs up the existing DLL, installs the new DLL and tools, preserves your existing configuration,
+and creates the Morbid Kitty - Star Trek Fleet Command shortcut on your desktop.
+If Windows requires permission for a protected game folder, setup offers Retry as admin.
+You do not need to copy or switch DLL files yourself.
 
-MANUAL CONTROLS
-F6: one select-and-attack request for the selected ship. A fresh press is required for another attack.
-F7: recall eligible ships belonging to this account. Ships busy in combat/warp are skipped; there is no retry.
-F12 / disk button: save this account's live UI, camera and supported settings, with a backup and verified read-back.
-1–8 / panel buttons: select one ship in the chosen STFC window.
-V / middle mouse: occupied mining-node card to cargo/treasure, then cargo/treasure and ship-strength views.
-The native Scan/Attack controls remain available. The return from the ship view to the mining-node card is still unresolved in this R18 baseline.
+START THE GAME
+Use the Morbid Kitty desktop shortcut. A three-second Morbid Kitty-and-Teddy intro appears once per
+new game process, then closes. The normal Community Mod/game loading screens continue underneath.
+The intro does not replace the Community Mod's artwork, tips, credits, or loading-screen implementation.
+Existing graphics preferences remain in effect.
 
-PANEL
-Clock: local time/date; drag the clock or title bar to move the panel.
-Timers: four named reminder timers with Start/Pause/Reset, saved across restarts. Timers only remind you.
-Store: official STFC web store in your normal resizable browser.
-Microphone: Windows voice typing (Win+H). Select a chat/text field in STFC first.
-Disk: save and show confirmation only after the selected game's DLL verifies the file.
-Diag: collect logs from the selected STFC installation into a Desktop ZIP. Nothing is sent automatically.
-Choose the game window in the panel. No keys are broadcast to other game windows.
+THE HUD PANEL
+A compact horizontal strip uses the original blue gradient button colors.
+It appears with the normal HUD in system/galaxy maps and station exterior/interior views, and hides
+on other pages such as Events, building details and Claims. It starts near the gap below Claim/Help
+and above Fleet Commander. Drag the clock to adjust its position; the position is saved relative to
+the game window. Initial placement and individual menu transitions need live confirmation on your UI scale.
+The clock and four named reminder timers continue while the strip is hidden.
+The panel attaches to this game instance; there is no window-selection box.
 
-If an existing TOML has different bindings, put these in its existing [shortcuts] section:
+BUTTONS AND SHORTCUTS
+1–8: select one ship using the normal numeric ship shortcuts.
+Store: official STFC web store in your default browser.
+Microphone: Windows voice typing (Win+H). Select a text field in the game first.
+Disk / F12: save supported live UI/camera settings to this account's configuration. Success is shown only after verified disk read-back.
+Diag: collect diagnostic files into a ZIP on the Desktop. The ZIP is not sent anywhere.
+Timers: four named reminders with Start/Pause/Reset, saved across restarts.
+F6: one select-and-attack request. Another attack needs another press.
+F7: recall eligible ships in this account. Busy ships may be skipped by the native game.
+V / middle mouse: occupied mining-node view to cargo/treasure, then cargo/treasure and ship-strength views.
+Native Scan/Attack controls remain available. Returning to the mining-node card from the ship view remains unresolved.
+
+Custom shortcut settings are preserved. New feature defaults under [shortcuts] are:
 action_select_attack_hostile = 'F6'
 action_recall_all = 'F7'
 save_settings = 'F12'
-The panel's 1–8 buttons use the standard numeric ship bindings.
+Optional companion settings under [ui]: community_panel_enabled = true; morbid_intro_enabled = true.
 
 DIAGNOSTICS
-Patch installation and errors; crash reports; occupied-miner viewer/context transitions; hostile identities,
-movement, targeting and attack-handler evidence; pursuit observations; all observed docks' hull/shield,
-cargo, mining and timing readings; action queue observations; named screen/canvas/focus and station-card readings.
-Readers preserve unknown/unavailable values. Live game state and client updates can affect availability.
-Diagnostic archives can contain game identifiers, Windows usernames, paths, and crash data. Review before sharing.
+Click Diagnostics on the HUD panel, or open Collect-Diagnostics.bat from the downloaded ZIP or the game's MorbidKitty folder to collect
+matching logs and crash dumps into a ZIP on your Desktop. Nothing is sent automatically.
+Read DIAGNOSTICS.md for the complete category/field list, file locations, collection behavior, privacy
+information, limits and unverified readings. The supplied package contains no saved accounts, credentials,
+personal configuration, collected game logs, Windows-user profiles or account-specific launcher arguments.
+Logs are created from the recipient's own game. They can contain game identifiers, Windows usernames and paths.
+Review diagnostic ZIPs before sharing. Crash dumps may contain incidental in-process data.
 
-VALIDATION
-This package is compiled from a pinned Community Mod base with the included source changes.
-Microsoft Defender and ClamAV reports and SHA256SUMS.txt accompany the release.
-Passing scans means no detections in those scans; it does not guarantee every antivirus will agree.
-The package is unsigned. No antivirus exclusions or disabled protections are needed by this installer.
-Automated checks cover input-request limits, reader policies, settings persistence and panel rendering.
-Live F6/F7, occupied-node views, voice typing and camera restoration still need in-game verification.
+REMOVE
+Use Morbid Kitty — STFC Community R18 in Windows Installed Apps, or open MorbidKitty-Uninstall.exe
+in the game's MorbidKitty folder. Close STFC first. Removal restores the original backed-up DLL and
+removes the installed shortcut and unchanged tool files. Personal configuration and logs are preserved.
+Files that were modified after installation are preserved rather than overwritten.
 
-SOURCE AND LICENSE
-Based on STFC-Mod/mod, commit 37e33084b711499c1ae3cc1988b58400c097546f.
+BUILD AND SCANS
+Compiled Windows DLL and tools, regression checks, installer rollback/update/removal checks and rendered
+UI checks. Microsoft Defender and ClamAV reports and SHA-256 checksums are provided on the release page.
+The build is unsigned. Clean scan results are not a guarantee that every antivirus will agree.
+Live F6/F7, mining-node views, HUD placement/visibility, and camera restoration still need in-game verification.
+
+SOURCE AND CREDITS
+STFC-Mod/mod (NetNiV's STFC Community Mod), base commit 37e33084b711499c1ae3cc1988b58400c097546f.
 https://github.com/STFC-Mod/mod
-Transactional TOML save/editor helpers credit Guffawaffle/stfc-mod, commit
+Transactional TOML save/editor helpers: Guffawaffle/stfc-mod, commit
 2395ba5f6599fd06942beffe0ad0212b0151754f (proposed upstream in PR #280).
-GPL-3.0; see LICENSE. Corresponding clean source is supplied as a separate release asset.
-Public download page: https://github.com/MorbidKittyLabs/Run17-builds/releases
+GPL-3.0; see LICENSE. Corresponding source is a separate release asset.
+Morbid Kitty splash and desktop icon use the existing approved Morbid Kitty/Teddy/spaceship artwork.

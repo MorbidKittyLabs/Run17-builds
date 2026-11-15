@@ -1,5 +1,5 @@
 diff --git a/example_community_patch_settings_en.toml b/example_community_patch_settings_en.toml
-index 33c835d..71b3920 100644
+index 33c835d..eb18b57 100644
 --- a/example_community_patch_settings_en.toml
 +++ b/example_community_patch_settings_en.toml
 @@ -146,7 +146,7 @@ fr_scale = 2.0
@@ -20,28 +20,6 @@ index 33c835d..71b3920 100644
  
  # Subgroup: Fleet Labels
  # ----------------------
-@@ -196,7 +196,7 @@ system_pan_momentum_falloff = 0.8
- # ----------------
- 
- # Set to true to use the loader_image for the loading screen
--loader_enabled = true
-+loader_enabled = false
- 
- # Path to the custom loading screen image (leave blank for embedded image)
- loader_image = ""
-@@ -205,10 +205,10 @@ loader_image = ""
- loader_logo_scale = 1.0
- 
- # Show the custom tip on the loading screen
--loader_tip_enabled = true
-+loader_tip_enabled = false
- 
- # Set to true to use the loader image for the transition screen
--loader_transition = true
-+loader_transition = false
- 
- # Use a black background instead of the custom image during transitions
- loader_transition_black = false
 @@ -235,7 +235,7 @@ use_presets_as_default = true
  # --------------
  
@@ -71,7 +49,17 @@ index 33c835d..71b3920 100644
  action_recall = "R|MOUSE3"
  
  # SPACE or Mouse1
-@@ -1023,3 +1029,18 @@ url = "https://next.spocks.club/sync/ingress/"
+@@ -705,6 +711,9 @@ zoom_reset = "="
+ #  <[===================================================================]>
+ 
+ [ui]
++# Optional HUD companion and short startup introduction.
++community_panel_enabled = true
++morbid_intro_enabled = true
+ # Skip the reveal box animation, and just open the boxes
+ always_skip_reveal_sequence = true
+ auto_confirm_discovery = true
+@@ -1023,3 +1032,18 @@ url = "https://next.spocks.club/sync/ingress/"
  [sync.targets.spocksclub]
  token = ""
  url = "https://spocks.club/sync/ingress/"
@@ -295,8 +283,175 @@ index 0000000..f68c06c
 +void Summarize(unsigned expected) noexcept;
 +void Event(std::string_view name, std::string_view detail) noexcept;
 +}
+diff --git a/mods/src/community_panel.cc b/mods/src/community_panel.cc
+new file mode 100644
+index 0000000..bd1c71b
+--- /dev/null
++++ b/mods/src/community_panel.cc
+@@ -0,0 +1,134 @@
++#include "community_panel.h"
++#if _WIN32
++#include "community_panel_policy.h"
++#include "config.h"
++#include "prime/Hub.h"
++#include "str_utils.h"
++#include <il2cpp/il2cpp_helper.h>
++#include <il2cpp/method_contract.h>
++#include <Windows.h>
++#include <spdlog/spdlog.h>
++#include <algorithm>
++#include <cctype>
++#include <filesystem>
++#include <optional>
++#include <string>
++
++namespace community_panel {
++namespace {
++// Read-only UI status. No gameplay command is accepted by this mapping.
++struct SharedHud {
++ uint32_t magic=0x31504b4d,version=1;
++ volatile LONG sequence=0;
++ uint32_t visible=0;
++ uint64_t tick=0,creation=0;
++ uint32_t pid=0;
++ int32_t section=0;
++ uint32_t observed=0,active=0;
++};
++static_assert(sizeof(SharedHud)==48);
++SharedHud* published=nullptr;
++HANDLE mapping=nullptr;
++Il2CppGCHandle hud_handle=0;
++uint64_t last_poll=0;
++bool started=false;
++
++Il2CppObject* Reference(Il2CppObject* object,const char* name) {
++ if(!object)return nullptr;
++ const auto* prop=il2cpp_class_get_property_from_name(il2cpp_object_get_class(object),name);
++ const auto* get=prop?il2cpp_property_get_get_method(const_cast<PropertyInfo*>(prop)):nullptr;
++ const auto* type=get?il2cpp_method_get_return_type(get):nullptr;
++ if(!get || get->parameters_count || (get->flags&METHOD_ATTRIBUTE_STATIC) || !type || type->byref
++    || (type->type!=IL2CPP_TYPE_CLASS && type->type!=IL2CPP_TYPE_OBJECT && type->type!=IL2CPP_TYPE_GENERICINST && type->type!=IL2CPP_TYPE_STRING))return nullptr;
++ Il2CppException* exception=nullptr;
++ auto* value=il2cpp_runtime_invoke(get,object,nullptr,&exception);
++ return exception?nullptr:value;
++}
++std::optional<bool> Boolean(Il2CppObject* object,const char* name) {
++ if(!object)return std::nullopt;
++ const auto* prop=il2cpp_class_get_property_from_name(il2cpp_object_get_class(object),name);
++ const auto* get=prop?il2cpp_property_get_get_method(const_cast<PropertyInfo*>(prop)):nullptr;
++ const auto* type=get?il2cpp_method_get_return_type(get):nullptr;
++ if(!get || get->parameters_count || (get->flags&METHOD_ATTRIBUTE_STATIC) || !type || type->byref || type->type!=IL2CPP_TYPE_BOOLEAN)return std::nullopt;
++ Il2CppException* exception=nullptr;
++ auto* value=il2cpp_runtime_invoke(get,object,nullptr,&exception);
++ if(exception || !value)return std::nullopt;
++ return *static_cast<bool*>(il2cpp_object_unbox(value));
++}
++bool ModalCanvas() {
++ auto* cls=il2cpp_get_class_helper("Assembly-CSharp","Digit.Client.UI","ScreenManager").get_cls();
++ const auto* method=method_contract::Resolve(cls,"GetTopCanvas",true,"Digit.Client.UI.CanvasController",{"System.Boolean"});
++ if(!method)return false;
++ bool visible=true;void* args[]={&visible};Il2CppException* exception=nullptr;
++ auto* canvas=il2cpp_runtime_invoke(method,nullptr,args,&exception);
++ if(exception || !canvas)return false;
++ std::string label=std::string(il2cpp_class_get_name(il2cpp_object_get_class(canvas)));
++ if(auto* value=Reference(canvas,"name")) {
++  auto* cls2=il2cpp_object_get_class(value);
++  if(il2cpp_class_get_type(cls2)->type==IL2CPP_TYPE_STRING) {
++   auto* str=reinterpret_cast<Il2CppString*>(value);
++   if(str->length>=0 && str->length<=160)label+=' '+to_string(str);
++  }
++ }
++ std::transform(label.begin(),label.end(),label.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});
++ return BlockingCanvas(label);
++}
++}
++void ObserveHud(void* object) noexcept {
++ try {
++  if(!object || !il2cpp_gchandle_new_weakref || !il2cpp_gchandle_get_target || !il2cpp_gchandle_free)return;
++  if(hud_handle && il2cpp_gchandle_get_target(hud_handle)==object)return;
++  if(hud_handle)il2cpp_gchandle_free(hud_handle);
++  hud_handle=il2cpp_gchandle_new_weakref(static_cast<Il2CppObject*>(object),false);
++ }catch(...){}
++}
++void Start() noexcept {
++ try {
++  if(started)return;
++  started=true;
++  if(!Config::Get().community_panel_enabled)return;
++  wchar_t buffer[32768]{};
++  const auto size=GetModuleFileNameW(nullptr,buffer,32768);
++  if(!size || size>=32768)return;
++  const auto directory=std::filesystem::path(buffer).parent_path()/L"MorbidKitty";
++  const auto executable=directory/L"Community-Panel.exe";
++  if(!std::filesystem::is_regular_file(executable))return;
++  mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(SharedHud),
++    (L"Local\\STFC.Community.Hud."+std::to_wstring(GetCurrentProcessId())).c_str());
++  if(mapping)published=static_cast<SharedHud*>(MapViewOfFile(mapping,FILE_MAP_WRITE,0,0,sizeof(SharedHud)));
++  if(published) {
++   *published=SharedHud{};published->pid=GetCurrentProcessId();
++   FILETIME a{},b{},c{},d{};
++   if(GetProcessTimes(GetCurrentProcess(),&a,&b,&c,&d))published->creation=(static_cast<uint64_t>(a.dwHighDateTime)<<32)|a.dwLowDateTime;
++  }
++  std::wstring command=L"\""+executable.wstring()+L"\" --attach "+std::to_wstring(GetCurrentProcessId());
++  if(Config::Get().morbid_intro_enabled)command+=L" --intro";
++  STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
++  if(CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,0,nullptr,directory.c_str(),&startup,&process)) {
++   CloseHandle(process.hThread);CloseHandle(process.hProcess);
++   spdlog::info("[CommunityPanel] Started this game's HUD companion; three-second intro={}",Config::Get().morbid_intro_enabled);
++  }else spdlog::warn("[CommunityPanel] Companion could not start; Windows error {}",GetLastError());
++ }catch(...){ /* Keep the game's startup unchanged if the optional companion is unavailable. */ }
++}
++void Pump() noexcept {
++ try {
++  if(!published)return;
++  const auto now=GetTickCount64();if(now-last_poll<100)return;last_poll=now;
++  auto* sections=Hub::get_SectionManager();
++  const auto section=sections?sections->CurrentSection:SectionID{};
++  const bool view=sections && (section==SectionID::Navigation_System || section==SectionID::Navigation_Galaxy
++    || section==SectionID::Starbase_Exterior || section==SectionID::Starbase_Interior);
++  auto* hud=hud_handle?il2cpp_gchandle_get_target(hud_handle):nullptr;
++  auto* game_object=Reference(hud,"gameObject");
++  const auto active=Boolean(game_object,"activeInHierarchy");
++  const bool show=Visible(view,active.has_value(),active.value_or(false),view && ModalCanvas());
++  InterlockedIncrement(&published->sequence);
++  published->visible=show;published->observed=active.has_value();published->active=active.value_or(false);
++  published->section=static_cast<int>(section);published->tick=now;
++  MemoryBarrier();InterlockedIncrement(&published->sequence);
++ }catch(...){}
++}
++}
++#else
++namespace community_panel {void Start() noexcept {}void ObserveHud(void*) noexcept {}void Pump() noexcept {}}
++#endif
+diff --git a/mods/src/community_panel.h b/mods/src/community_panel.h
+new file mode 100644
+index 0000000..15dabbb
+--- /dev/null
++++ b/mods/src/community_panel.h
+@@ -0,0 +1,2 @@
++#pragma once
++namespace community_panel {void Start() noexcept;void ObserveHud(void*) noexcept;void Pump() noexcept;}
+diff --git a/mods/src/community_panel_policy.h b/mods/src/community_panel_policy.h
+new file mode 100644
+index 0000000..755aacd
+--- /dev/null
++++ b/mods/src/community_panel_policy.h
+@@ -0,0 +1,13 @@
++#pragma once
++#include <initializer_list>
++#include <string_view>
++namespace community_panel {
++inline bool Visible(bool map_or_base,bool observed,bool active,bool blocked) {
++ return map_or_base && observed && active && !blocked;
++}
++inline bool BlockingCanvas(std::string_view name) {
++ for(auto word:{"claim","gift","event","construction","building","research","shop","officer","inventory"})
++  if(name.find(word)!=std::string_view::npos)return true;
++ return false;
++}
++}
 diff --git a/mods/src/config.cc b/mods/src/config.cc
-index 8102a74..e10804e 100644
+index 8102a74..878b5ee 100644
 --- a/mods/src/config.cc
 +++ b/mods/src/config.cc
 @@ -1,4 +1,5 @@
@@ -321,7 +476,16 @@ index 8102a74..e10804e 100644
    if (this->ui_scale_viewer != 0.0f) {
      auto old_scale        = this->ui_scale_viewer;
      auto scale_factor     = (scaleUp ? 1.0f : -1.0f) * this->ui_scale_step;
-@@ -1436,10 +1439,14 @@ void Config::Load()
+@@ -1140,6 +1143,8 @@ void Config::Load()
+       get_config_or_default(config, parsed, "ui", "disable_escape_exit", DCU::disable_escape_exit, write_config);
+   this->disable_escape_exit_timer = get_config_or_default(config, parsed, "ui", "disable_escape_exit_timer",
+                                                           DCU::disable_escape_exit_timer, write_config);
++  this->community_panel_enabled = get_config_or_default(config, parsed, "ui", "community_panel_enabled", DCU::community_panel_enabled, write_config);
++  this->morbid_intro_enabled = get_config_or_default(config, parsed, "ui", "morbid_intro_enabled", DCU::morbid_intro_enabled, write_config);
+   this->disable_preview_locate =
+       get_config_or_default(config, parsed, "ui", "disable_preview_locate", DCU::disable_preview_locate, write_config);
+   this->disable_preview_recall =
+@@ -1436,10 +1441,14 @@ void Config::Load()
    parse_config_shortcut(config, parsed, "focus_search", GameFunction::FocusSearch, DCSH::focus_search);
  
    parse_config_shortcut(config, parsed, "action_primary", GameFunction::ActionPrimary, DCSH::action_primary);
@@ -336,6 +500,19 @@ index 8102a74..e10804e 100644
    parse_config_shortcut(config, parsed, "action_recall", GameFunction::ActionRecall, DCSH::action_recall);
    parse_config_shortcut(config, parsed, "action_recall_cancel", GameFunction::ActionRecallCancel,
                          DCSH::action_recall_cancel);
+diff --git a/mods/src/config.h b/mods/src/config.h
+index cf19f99..e5cd9c2 100644
+--- a/mods/src/config.h
++++ b/mods/src/config.h
+@@ -214,6 +214,8 @@ public:
+   int                      extend_donation_max;
+   bool                     extend_donation_slider;
+   bool                     disable_move_keys;
++  bool community_panel_enabled;
++  bool morbid_intro_enabled;
+   bool                     disable_preview_locate;
+   bool                     disable_preview_recall;
+   bool                     disable_escape_exit;
 diff --git a/mods/src/config_save.cc b/mods/src/config_save.cc
 new file mode 100644
 index 0000000..e7e8685
@@ -547,7 +724,7 @@ index 0000000..8e87aa8
 +bool ReplaceConfigText(const std::filesystem::path& path, std::string_view text,
 +                       std::optional<std::string_view> expected = std::nullopt);
 diff --git a/mods/src/defaultconfig.h b/mods/src/defaultconfig.h
-index 5849871..c4e842a 100644
+index 5849871..51f0612 100644
 --- a/mods/src/defaultconfig.h
 +++ b/mods/src/defaultconfig.h
 @@ -45,7 +45,7 @@ namespace Graphics
@@ -559,7 +736,7 @@ index 5849871..c4e842a 100644
    constexpr bool        free_resize                     = true;
    constexpr auto        keyboard_zoom_speed             = 350;
    constexpr auto        system_pan_momentum_falloff     = 0.8;
-@@ -56,17 +56,17 @@ namespace Graphics
+@@ -56,10 +56,10 @@ namespace Graphics
    constexpr auto        system_zoom_preset_4            = 2750;
    constexpr auto        system_zoom_preset_5            = 5000;
    constexpr auto        transition_time                 = 0.01;
@@ -572,24 +749,6 @@ index 5849871..c4e842a 100644
    constexpr bool        use_presets_as_default          = true;
    constexpr auto        zoom                            = 5000;
    constexpr auto        haven_zoom                      = 4000.0;
-   constexpr auto        interior_zoom_scale             = 2.0; // station-interior zoom-out multiplier; 1.0 = native
-   constexpr auto        fr_scale                        = 2.0;
--  constexpr bool        loader_enabled                  = true; // replace LoginSequence background
--  constexpr bool        loader_transition               = true; // replace TVC/SlideShow backgrounds
-+  constexpr bool        loader_enabled                  = false; // replace LoginSequence background
-+  constexpr bool        loader_transition               = false; // replace TVC/SlideShow backgrounds
- #ifdef _USE_ORIGINAL_BG
-   constexpr bool loader_transition_black = true; // original BG mode: use black transition
- #else
-@@ -74,7 +74,7 @@ namespace Graphics
- #endif
-   constexpr const char* loader_image       = "";   // Empty = use embedded fallback
-   constexpr auto        loader_logo_scale  = 1.0;  // multiplier for logo size
--  constexpr bool        loader_tip_enabled = true; // show custom tip on loading screen
-+  constexpr bool        loader_tip_enabled = false; // show custom tip on loading screen
- } // namespace Graphics
- 
- namespace Patches
 @@ -125,6 +125,9 @@ namespace Shortcuts
    constexpr const char* action_queue         = "SPACE|MOUSE1";
    constexpr const char* action_queue_clear   = "CTRL-C";
@@ -600,6 +759,15 @@ index 5849871..c4e842a 100644
    constexpr const char* action_recall        = "R|MOUSE3";
    constexpr const char* action_recall_cancel = "SPACE|MOUSE1";
    constexpr const char* action_repair        = "R|MOUSE3";
+@@ -262,6 +265,8 @@ namespace Sync
+ 
+ namespace UI
+ {
++  constexpr bool community_panel_enabled = true;
++  constexpr bool morbid_intro_enabled = true;
+   constexpr bool        always_skip_reveal_sequence        = true;
+   constexpr bool        arrow_keys_to_select_ship          = true;
+   constexpr bool        dock_syncmanagement                = true;
 diff --git a/mods/src/diagnostic_monitor_policy.h b/mods/src/diagnostic_monitor_policy.h
 new file mode 100644
 index 0000000..b516c9b
@@ -2855,11 +3023,12 @@ index 0000000..7186a1b
 +};
 +} // namespace hostile_audit
 diff --git a/mods/src/patches/parts/hotkeys.cc b/mods/src/patches/parts/hotkeys.cc
-index 8592d89..18ed1d4 100644
+index 8592d89..49611be 100644
 --- a/mods/src/patches/parts/hotkeys.cc
 +++ b/mods/src/patches/parts/hotkeys.cc
-@@ -1,5 +1,13 @@
+@@ -1,5 +1,14 @@
  #include "config.h"
++#include "community_panel.h"
 +#include "single_settings_save.h"
 +#include "fleet_diagnostics.h"
  #include "patches/ship_shortcut_hint.h"
@@ -2872,7 +3041,7 @@ index 8592d89..18ed1d4 100644
  
  #include <spud/detour.h>
  #include <il2cpp/method_contract.h>
-@@ -48,6 +56,8 @@
+@@ -48,6 +57,8 @@
  #include "patches/parts/daily_faction_bulk_claim.h"
  #include "patches/parts/double_click_assign_ship.h"
  #include "patches/parts/focus_search.h"
@@ -2881,7 +3050,7 @@ index 8592d89..18ed1d4 100644
  #include "str_utils.h"
  
  #include <il2cpp-tabledefs.h>
-@@ -77,6 +87,218 @@ static int  show_officer_presets_pending       = 0;
+@@ -77,6 +88,218 @@ static int  show_officer_presets_pending       = 0;
  static int  show_officer_swap_pending          = 0;
  static int  show_ship_swap_pending             = 0;
  static bool officer_presets_assignment_opened = false;
@@ -3100,17 +3269,18 @@ index 8592d89..18ed1d4 100644
  
  using GetShowKeybindingsFn     = bool(void*);
  using SetShowKeybindingsFn     = void(void*, bool);
-@@ -707,7 +929,9 @@ bool PressOfficerPresetsButton()
+@@ -707,7 +930,10 @@ bool PressOfficerPresetsButton()
  
  void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
  {
++  community_panel::Pump();
 +  single_settings::Pump();
    dispatch_screen_manager_update_callbacks();
 +  fleet_diagnostics::Pump();
    if (!Config::Get().installHotkeyHooks) {
      return original(_this);
    }
-@@ -780,10 +1004,12 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -780,10 +1006,12 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
    }
  
    if (Config::Get().use_scopely_hotkeys && Config::Get().hotkeys_enabled) {
@@ -3123,7 +3293,7 @@ index 8592d89..18ed1d4 100644
      return;
    }
  
-@@ -1172,7 +1398,26 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -1172,7 +1400,26 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
      }
    }
  
@@ -3150,7 +3320,7 @@ index 8592d89..18ed1d4 100644
      // Lets try to remove the pre-scan because we hit escape and it's visible
      if (Key::Pressed(KeyCode::Escape)) {
        if (config->primary_requires_visible_target) {
-@@ -1210,7 +1455,20 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -1210,7 +1457,20 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
  
      DailyFactionBulkClaimUpdate();
  
@@ -3172,7 +3342,7 @@ index 8592d89..18ed1d4 100644
        auto all_pre_scan_widgets = ObjectFinder<PreScanTargetWidget>::GetAll();
  
        for (auto& pre_scan_widget : all_pre_scan_widgets) {
-@@ -1830,6 +2088,17 @@ void InstallShortcutHintHooks()
+@@ -1830,6 +2090,17 @@ void InstallShortcutHintHooks()
  
  void InstallHotkeyHooks()
  {
@@ -3190,7 +3360,7 @@ index 8592d89..18ed1d4 100644
    auto shortcuts_manager_helper =
        il2cpp_get_class_helper("Assembly-CSharp", "Digit.Prime.GameInput", "ShortcutsManager");
    if (!shortcuts_manager_helper.isValidHelper()) {
-@@ -1872,6 +2141,7 @@ void InstallHotkeyHooks()
+@@ -1872,6 +2143,7 @@ void InstallHotkeyHooks()
    InstallShortcutHintHooks();
  
    install_screen_manager_update_hook();
@@ -3484,6 +3654,39 @@ index 22461f6..10a01df 100644
  }
  
  void SetTMPText(void* tmpObj, const std::string& text)
+diff --git a/mods/src/patches/parts/mission_hud_tweaks.cc b/mods/src/patches/parts/mission_hud_tweaks.cc
+index 8eeee11..8603c3b 100644
+--- a/mods/src/patches/parts/mission_hud_tweaks.cc
++++ b/mods/src/patches/parts/mission_hud_tweaks.cc
+@@ -1,4 +1,5 @@
+ #include "config.h"
++#include "community_panel.h"
+ #include "errormsg.h"
+ 
+ #include <il2cpp/il2cpp_helper.h>
+@@ -138,12 +139,14 @@ void ApplyConfiguredButtonVisibility(void* controller)
+ void MissionsHudViewController_OnEnable_Hook(auto original, void* controller)
+ {
+   original(controller);
++  community_panel::ObserveHud(controller);
+   ApplyConfiguredButtonVisibility(controller);
+ }
+ 
+ void MissionsHudViewController_SetupAchievementsButton_Hook(auto original, void* controller)
+ {
+   original(controller);
++  community_panel::ObserveHud(controller);
+   ApplyConfiguredButtonVisibility(controller);
+ }
+ 
+@@ -164,6 +167,7 @@ void MissionsHudViewController_HandleOutpostsAndChallengesHUD_Hook(auto original
+   // In planetary view this method hides challenges directly, bypassing its setup
+   // method. Reapply after the whole operation, including the planetary branch.
+   original(controller);
++  community_panel::ObserveHud(controller);
+   ApplyConfiguredButtonVisibility(controller);
+ }
+ 
 diff --git a/mods/src/patches/parts/object_tracker.cc b/mods/src/patches/parts/object_tracker.cc
 index e6a30fc..f69ec77 100644
 --- a/mods/src/patches/parts/object_tracker.cc
@@ -3810,10 +4013,12 @@ index 2fb7af7..7dbeff6 100644
      auto fleet_widget_helper =
          il2cpp_get_class_helper("Assembly-CSharp", "Digit.Prime.Navigation", "NavigationFleetWidget");
 diff --git a/mods/src/patches/patches.cc b/mods/src/patches/patches.cc
-index 7a30836..aa91e48 100644
+index 7a30836..364598e 100644
 --- a/mods/src/patches/patches.cc
 +++ b/mods/src/patches/patches.cc
-@@ -2,6 +2,7 @@
+@@ -1,7 +1,9 @@
+ #include "patches.h"
++#include "community_panel.h"
  #include "file.h"
  #include "log_history.h"
  #include "version.h"
@@ -3821,7 +4026,7 @@ index 7a30836..aa91e48 100644
  
  #include <il2cpp/il2cpp-functions.h>
  
-@@ -96,6 +97,7 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
+@@ -96,6 +98,7 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
  
    spdlog::set_level(log_level);
    spdlog::flush_on(log_level);
@@ -3829,17 +4034,18 @@ index 7a30836..aa91e48 100644
    if (!rotation_error.empty()) {
      spdlog::warn("Failed to rotate log history; preserving existing log: {}", rotation_error);
    }
-@@ -136,7 +138,9 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
+@@ -136,7 +139,10 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
    spdlog::info("Loading Configuration...");
    spdlog::info("");
  
 +  CollectiveDiagnostics::Event("config_load_begin", "");
    static auto& cfg = Config::Get();
 +  CollectiveDiagnostics::Event("config_load_returned", "");
++  community_panel::Start();
  
    spdlog::info("");
    spdlog::info("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=");
-@@ -187,7 +191,11 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
+@@ -187,7 +193,11 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
    };
    printf("il2cpp_init_hook(%s)\n", domain_name);
  
@@ -3851,7 +4057,7 @@ index 7a30836..aa91e48 100644
  
    auto patch_count = 0;
    auto patch_total = sizeof(patches) / sizeof(patches[0]);
-@@ -199,10 +207,25 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
+@@ -199,10 +209,25 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
      const auto patch_mode                  = patch_install ? "+ Patch" : "x Skipp";
      spdlog::info(" {}ing {:>2} of {} ({})", patch_mode, patch_count, patch_total, patch.name);
  
@@ -3976,10 +4182,10 @@ index c6b1047..2daea73 100644
 +};
 diff --git a/mods/src/pursuit_monitor.inc b/mods/src/pursuit_monitor.inc
 new file mode 100644
-index 0000000..223f55e
+index 0000000..449f6bb
 --- /dev/null
 +++ b/mods/src/pursuit_monitor.inc
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,130 @@
 +// Included inside hostile_audit. Read-only; no actions, hooks or retained managed pointers.
 +namespace {
 +namespace po=pursuit_observer;
@@ -4099,7 +4305,6 @@ index 0000000..223f55e
 +      {"link_cleared",flags.link_cleared},{"course_turn_at_least_15_degrees",flags.course_changed},
 +      {"stopped_and_clear_candidate",flags.dormant_candidate}};
 +    record["candidate_rule"]="previously linked; explicit nonmatching target ID; own pursued count zero; own idle; hostile not battling; position within 0.25 model units for 1s; no observation gaps over 500ms";
-+    record["automatic_evasion_enabled"]=false;
 +    Write(std::move(record));
 +   }
 +  }
