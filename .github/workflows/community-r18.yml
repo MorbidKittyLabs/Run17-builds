@@ -142,12 +142,9 @@ jobs:
             panel-error.txt
             installer-error.txt
           if-no-files-found: ignore
-  publish:
-    if: github.ref == 'refs/heads/main'
+  scan:
     needs: windows
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
@@ -170,6 +167,26 @@ jobs:
           sha256sum package/version.dll package/Community-Panel.exe package/MorbidKitty-Setup.exe | tee -a package/ClamAV-Scan.txt
           clamscan --recursive --verbose --allmatch --max-filesize=200M --max-scansize=500M package/ Community-R18-Source.zip | tee -a package/ClamAV-Scan.txt
           python3 community-r18/package_release.py complete
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Community-R18-Scanned
+          path: |
+            package/
+            STFC-Community-R18-Windows.zip
+            Community-R18-Source.zip
+            SHA256SUMS.txt
+          if-no-files-found: error
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: Community-R18-Scanned
       - name: Publish scanned downloads
         env:
           GH_TOKEN: ${{ github.token }}

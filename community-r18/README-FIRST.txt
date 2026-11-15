@@ -18,12 +18,12 @@ The intro does not replace the Community Mod's artwork, tips, credits, or loadin
 Existing graphics preferences remain in effect.
 
 THE HUD PANEL
-A compact horizontal strip uses the original blue gradient button colors.
+A compact vertical panel uses the original blue gradient button colors.
 It appears with the normal HUD in system/galaxy maps and station exterior/interior views, and hides
 on other pages such as Events, building details and Claims. It starts near the gap below Claim/Help
 and above Fleet Commander. Drag the clock to adjust its position; the position is saved relative to
 the game window. Initial placement and individual menu transitions need live confirmation on your UI scale.
-The clock and four named reminder timers continue while the strip is hidden.
+The clock and four named reminder timers continue while the panel is hidden.
 The panel attaches to this game instance; there is no window-selection box.
 
 BUTTONS AND SHORTCUTS
