@@ -10,17 +10,20 @@ using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
+public static class BeveledFace {
+ public static GraphicsPath Shape(Rectangle bounds,int radius){var p=new GraphicsPath();int d=Math.Min(radius*2,Math.Min(bounds.Width,bounds.Height));if(d<=0)return p;p.AddArc(bounds.Left,bounds.Top,d,d,180,90);p.AddArc(bounds.Right-d,bounds.Top,d,d,270,90);p.AddArc(bounds.Right-d,bounds.Bottom-d,d,d,0,90);p.AddArc(bounds.Left,bounds.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
+ public static void Paint(Graphics g,Rectangle area,string text,Font font,Color foreground,Color top,Color bottom){if(area.Width<5||area.Height<5)return;g.SmoothingMode=SmoothingMode.AntiAlias;var outer=new Rectangle(1,1,area.Width-3,area.Height-3);using(var path=Shape(outer,5))using(var brush=new LinearGradientBrush(area,top,bottom,LinearGradientMode.Vertical)){g.FillPath(brush,path);using(var pen=new Pen(Color.FromArgb(3,39,61),2))g.DrawPath(pen,path);}var inner=new Rectangle(3,3,area.Width-7,area.Height-7);using(var path=Shape(inner,3))using(var pen=new Pen(Color.FromArgb(158,217,236)))g.DrawPath(pen,path);TextRenderer.DrawText(g,text,font,area,foreground,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}
+}
 public class GameButton:Button {
+ public Color TopColor=Color.FromArgb(26,155,211),BottomColor=Color.FromArgb(7,82,127);
  public GameButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);FlatStyle=FlatStyle.Flat;FlatAppearance.BorderSize=0;TabStop=false;UseVisualStyleBackColor=false;ForeColor=Color.FromArgb(244,252,255);}
- protected override void OnPaint(PaintEventArgs e){
-  var r=ClientRectangle;if(r.Width<4||r.Height<4)return;
-  e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
-  Color top=Enabled?Color.FromArgb(26,155,211):Color.FromArgb(67,90,105),bottom=Enabled?Color.FromArgb(7,82,127):Color.FromArgb(35,51,62);
-  using(var brush=new LinearGradientBrush(r,top,bottom,LinearGradientMode.Vertical))e.Graphics.FillRectangle(brush,r);
-  using(var edge=new Pen(Color.FromArgb(6,51,79),2))e.Graphics.DrawRectangle(edge,1,1,r.Width-2,r.Height-2);
-  using(var edge=new Pen(Color.FromArgb(158,217,236)))e.Graphics.DrawRectangle(edge,3,3,r.Width-7,r.Height-7);
-  TextRenderer.DrawText(e.Graphics,Text,Font,r,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);
- }
+ protected override void OnResize(EventArgs e){base.OnResize(e);if(Width>1&&Height>1)using(var path=BeveledFace.Shape(ClientRectangle,5)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
+ protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,Enabled?ForeColor:Color.Silver,Enabled?TopColor:Color.FromArgb(67,90,105),Enabled?BottomColor:Color.FromArgb(35,51,62));}
+}
+public sealed class GameClock:Label {
+ public GameClock(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}
+ protected override void OnResize(EventArgs e){base.OnResize(e);if(Width>1&&Height>1)using(var path=BeveledFace.Shape(ClientRectangle,5)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
+ protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,ForeColor,Color.FromArgb(26,155,211),Color.FromArgb(7,82,127));}
 }
 public static class GamePaths {
  public static bool IsGame(string path){return !String.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path,"Prime.exe")) && File.Exists(Path.Combine(path,"GameAssembly.dll"));}
@@ -58,4 +61,9 @@ public sealed class MorbidIntro:Form {
   closeTimer.Interval=milliseconds;closeTimer.Tick+=(s,e)=>Close();Shown+=(s,e)=>{elapsed.Start();closeTimer.Start();};
  }
  protected override void Dispose(bool disposing){if(disposing){closeTimer.Dispose();if(art!=null)art.Dispose();}base.Dispose(disposing);}
+}
+
+public static class PanelWake {
+ public static string EventName(int pid){return "Local\\STFC.Community.Show."+pid;}
+ public static void Signal(int pid){try{using(var e=System.Threading.EventWaitHandle.OpenExisting(EventName(pid)))e.Set();}catch(System.Threading.WaitHandleCannotBeOpenedException){} }
 }

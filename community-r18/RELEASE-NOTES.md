@@ -1,3 +1,14 @@
+## Controller correction
+
+- Controller remains available in full-screen chat; mic opens/focuses chat before invoking Windows voice typing. Detail-page visibility refreshes more promptly.
+
+- Clear controller background; rounded double bevels and a boxed clock.
+- Full-monitor borderless play by default; F9 restores the desktop/windowed game, F10 quits.
+- F8 and right-clicking the right-edge handle restore hidden controls. Reopening the desktop shortcut also restores them.
+- Right-drag any control to move the menu. Red X hides it, Store X closes only Store, purple X closes the game.
+- Only assigned dock buttons are shown, packed with their actual dock numbers. Each click directly selects and locates that ship.
+- Six named corner-popup timers with days/hours/minutes/seconds, preserving existing four-timer state.
+
 **Download `MorbidKitty-Setup.exe`, open it, and click INSTALL.** No manual DLL swapping is needed.
 
 The installer finds the game or lets you select `Prime.exe`, backs up the previous DLL, preserves existing settings, installs the launcher/diagnostic tools, and creates the Morbid Kitty desktop shortcut. Removal restores the backed-up DLL and preserves personal settings/logs.

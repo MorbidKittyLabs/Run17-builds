@@ -4,7 +4,7 @@
 
 **Open the installer, then click INSTALL.** It finds STFC or lets you browse to `Prime.exe`, backs up/replaces the DLL, installs the tools, preserves existing settings, and creates the Morbid Kitty desktop shortcut.
 
-A three-second Morbid Kitty-and-Teddy intro closes automatically, followed by the normal loading screens. The vertical blue HUD panel includes the clock, four saved reminders, Store, Windows voice typing, verified Save Settings, Diagnostics and ship buttons 1–8. F6 makes one select-and-attack request; F7 recalls this account's eligible ships.
+A three-second Morbid Kitty-and-Teddy intro closes automatically, followed by the normal loading screens. The clear-background, rounded vertical HUD panel includes the boxed clock, six saved reminders with days/hours/minutes/seconds, Store, Windows voice typing, verified Save Settings, Diagnostics and ship buttons 1–8. F8 restores hidden controls; F9 toggles borderless/windowed play. Ship buttons show available assigned docks and select/locate with one click. Red X hides controls; Store X closes Store; purple X closes the game. F6 makes one select-and-attack request; F7 recalls this account's eligible ships.
 
 Troubleshooting tools and their source are included. Click **Diag** on the HUD panel or run `Collect-Diagnostics.bat` to create a local diagnostic ZIP for review; nothing is uploaded.
 

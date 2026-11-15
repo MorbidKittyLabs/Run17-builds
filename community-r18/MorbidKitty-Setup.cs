@@ -14,7 +14,7 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 [assembly:AssemblyTitle("Morbid Kitty STFC Setup")]
 [assembly:AssemblyDescription("Install the single-account Community R18 branch")]
-[assembly:AssemblyVersion("18.2.0.0")]
+[assembly:AssemblyVersion("18.4.0.0")]
 
 [DataContract] public sealed class InstallRecord {
  [DataMember] public string RelativePath,OriginalBackup,InstalledHash;
@@ -80,7 +80,7 @@ public static class InstallerCore {
    Directory.CreateDirectory(desktop);CreateShortcut(manifest.Shortcut,Path.Combine(tools,"MorbidKitty-Launcher.exe"),tools,Path.Combine(tools,"MorbidKitty.ico"));
    Write(manifestPath,manifest);
    using(var key=Registry.CurrentUser.CreateSubKey(Key(game))){
-    key.SetValue("DisplayName","Morbid Kitty — STFC Community R18");key.SetValue("DisplayVersion","18.2");key.SetValue("Publisher","Morbid Kitty Labs");
+    key.SetValue("DisplayName","Morbid Kitty — STFC Community R18");key.SetValue("DisplayVersion","18.4");key.SetValue("Publisher","Morbid Kitty Labs");
     key.SetValue("InstallLocation",game);key.SetValue("DisplayIcon",Path.Combine(tools,"MorbidKitty.ico"));
     key.SetValue("UninstallString",GamePaths.Quote(Path.Combine(tools,"MorbidKitty-Uninstall.exe"))+" --uninstall --game "+GamePaths.Quote(game));key.SetValue("NoModify",1);key.SetValue("NoRepair",1);
    }
