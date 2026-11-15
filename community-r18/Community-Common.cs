@@ -59,11 +59,18 @@ public static class GamePaths {
 public sealed class MorbidIntro:Form {
  readonly Image art;readonly System.Windows.Forms.Timer closeTimer=new System.Windows.Forms.Timer();
  readonly Stopwatch elapsed=new Stopwatch();public double ElapsedSeconds {get{return elapsed.Elapsed.TotalSeconds;}}
- public MorbidIntro(string assetDirectory,int milliseconds){
-  Text="Morbid Kitty";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;BackColor=Color.Black;StartPosition=FormStartPosition.CenterScreen;ClientSize=new Size(430,430);
+ readonly Func<bool> windowReady;readonly Func<Rectangle> monitorBounds;readonly int minimumMilliseconds;long readySince=-1;
+ public MorbidIntro(string assetDirectory,int milliseconds,Func<bool> ready=null,Func<Rectangle> monitor=null){
+  minimumMilliseconds=milliseconds;windowReady=ready;monitorBounds=monitor;
+  AutoScaleMode=AutoScaleMode.None;Text="Morbid Kitty";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;BackColor=Color.Black;StartPosition=FormStartPosition.Manual;Bounds=monitor==null?Screen.FromPoint(Cursor.Position).Bounds:monitor();
   string path=Path.Combine(assetDirectory,"MorbidKitty-Splash.png");if(File.Exists(path))art=Image.FromFile(path);
   BackgroundImage=art;BackgroundImageLayout=ImageLayout.Zoom;GamePaths.IconFor(this,assetDirectory);
-  closeTimer.Interval=milliseconds;closeTimer.Tick+=(s,e)=>Close();Shown+=(s,e)=>{elapsed.Start();closeTimer.Start();};
+  closeTimer.Interval=100;closeTimer.Tick+=(s,e)=>{
+   if(monitorBounds!=null){var bounds=monitorBounds();if(!bounds.IsEmpty&&bounds!=Bounds){Bounds=bounds;readySince=-1;}}
+   bool readyNow=windowReady==null||windowReady();
+   if(!readyNow)readySince=-1;else if(readySince<0)readySince=elapsed.ElapsedMilliseconds;
+   if(elapsed.ElapsedMilliseconds>=minimumMilliseconds&&readySince>=0&&elapsed.ElapsedMilliseconds-readySince>=800)Close();
+  };Shown+=(s,e)=>{elapsed.Start();closeTimer.Start();};
  }
  protected override void Dispose(bool disposing){if(disposing){closeTimer.Dispose();if(art!=null)art.Dispose();}base.Dispose(disposing);}
 }

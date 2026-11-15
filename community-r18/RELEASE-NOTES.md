@@ -2,6 +2,7 @@
 
 Open **MorbidKitty-Setup** and click **INSTALL**, then launch from the Morbid Kitty desktop shortcut.
 
+- Full-monitor black Morbid Kitty splash waits for the game window to settle.
 - Smaller controller: clock, Timers, Diagnostics, Store, microphone and Save.
 - White Xs in red/purple boxes, a green restore arrow, and right-drag through controller gaps.
 - Numbered ship shortcuts follow the docks; controls follow game UI scaling and loading transitions.

@@ -14,7 +14,7 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 [assembly:AssemblyTitle("Morbid Kitty STFC Setup")]
 [assembly:AssemblyDescription("Install the single-account Community R18 branch")]
-[assembly:AssemblyVersion("18.4.0.0")]
+[assembly:AssemblyVersion("18.5.0.0")]
 
 [DataContract] public sealed class InstallRecord {
  [DataMember] public string RelativePath,OriginalBackup,InstalledHash;

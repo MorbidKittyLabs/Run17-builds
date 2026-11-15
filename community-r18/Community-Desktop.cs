@@ -19,6 +19,8 @@ public sealed class GameDesktop:IDisposable {
  [DllImport("user32.dll")] static extern bool SetWindowPlacement(IntPtr h,ref Placement placement);
  [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
  [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+ [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+ [DllImport("user32.dll")] static extern bool IsHungAppWindow(IntPtr h);
  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h,out Rect r);
  const int Decorations=0x00C00000|0x00040000|0x00080000;
  IntPtr window;int style;Placement original;Rectangle target;
@@ -34,6 +36,12 @@ public sealed class GameDesktop:IDisposable {
  }
  public void Restore(){if(window!=IntPtr.Zero && IsWindow(window)){SetWindowLong(window,-16,style);SetWindowPlacement(window,ref original);SetWindowPos(window,IntPtr.Zero,0,0,0,0,0x0020|0x0010|0x0004|0x0001|0x0002);}window=IntPtr.Zero;}
  public void Dispose(){Restore();}
+ public static bool IsEstablished(IntPtr handle,bool borderless){
+  if(handle==IntPtr.Zero||!IsWindow(handle)||!IsWindowVisible(handle)||IsIconic(handle)||IsHungAppWindow(handle))return false;
+  Rect r;if(!GetWindowRect(handle,out r)||r.Right-r.Left<100||r.Bottom-r.Top<100)return false;
+  if(!borderless)return true;
+  var target=Screen.FromHandle(handle).Bounds;return (GetWindowLong(handle,-16)&Decorations)==0&&r.Left==target.Left&&r.Top==target.Top&&r.Right==target.Right&&r.Bottom==target.Bottom;
+ }
  public static void Verify(){using(var f=new Form{Text="Borderless regression fixture",Bounds=new Rectangle(35,45,480,300)}){f.Show();Application.DoEvents();int before=GetWindowLong(f.Handle,-16);using(var d=new GameDesktop()){d.Apply(f.Handle);Application.DoEvents();if((GetWindowLong(f.Handle,-16)&Decorations)!=0)throw new Exception("Game title/frame not removed");Rect r;GetWindowRect(f.Handle,out r);var b=Screen.FromHandle(f.Handle).Bounds;if(r.Left!=b.Left||r.Top!=b.Top||r.Right-r.Left!=b.Width||r.Bottom-r.Top!=b.Height)throw new Exception("Game does not fill the monitor including taskbar area");d.Restore();if(GetWindowLong(f.Handle,-16)!=before)throw new Exception("Game style not restored");}f.Close();}}
 }
 

@@ -6,7 +6,8 @@ INSTALL
 3. If asked, choose Prime.exe in your STFC game folder.
 4. Start the game using the new Morbid Kitty desktop shortcut.
 
-The Morbid Kitty intro appears briefly, followed by Community Mod's loading screen.
+The full-screen Morbid Kitty intro stays until the game window settles into place,
+then reveals Community Mod's loading screen.
 Your existing game settings are kept.
 
 CONTROLS

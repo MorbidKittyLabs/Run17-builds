@@ -209,7 +209,7 @@ public sealed class CommunityPanel:Form {
   LayoutController(1);
   InstallGapDrag();
   if(!preview){wake=new EventWaitHandle(false,EventResetMode.AutoReset,PanelWake.EventName(pid));var nativeHandle=Handle;}
-  if(showIntro && !preview){intro=new MorbidIntro(root,3000);intro.FormClosed+=(o,e)=>{intro=null;};intro.Show();}
+  if(showIntro && !preview){intro=new MorbidIntro(root,3000,()=>bound!=null&&GameDesktop.IsEstablished(bound.Window,state.Borderless),()=>bound!=null&&bound.Window!=IntPtr.Zero?Screen.FromHandle(bound.Window).Bounds:Screen.FromPoint(Cursor.Position).Bounds);intro.FormClosed+=(o,e)=>{intro=null;};intro.Show();}
   ResizeEnd+=(o,e)=>SavePlacement();
   FormClosing+=(o,e)=>{if(!closing && e.CloseReason==CloseReason.UserClosing){e.Cancel=true;HideMenu();return;}closing=true;Persist();};
   ui.Interval=50;ui.Tick+=(s,e)=>UpdateUi();ui.Start();RefreshGames();
@@ -474,11 +474,12 @@ public sealed class CommunityPanel:Form {
     }
     ResetAlarm(a);if(a.Finished)throw new Exception("Timer reset kept finished state");
     string test=Path.Combine(args[1],"state-test.json");var state=new PanelState();state.Alarms.Add(a);PanelStorage.Save(test,state);if(PanelStorage.Load(test).Alarms[0].Remaining!=120)throw new Exception("State persistence regression");
-    using(var intro=new MorbidIntro(AppDomain.CurrentDomain.BaseDirectory,3000)){
+    var splashWatch=Stopwatch.StartNew();
+    using(var intro=new MorbidIntro(AppDomain.CurrentDomain.BaseDirectory,3000,()=>splashWatch.ElapsedMilliseconds>=4000)){
      intro.Shown+=(o,e)=>{Application.DoEvents();using(var bmp=new Bitmap(intro.Width,intro.Height)){intro.DrawToBitmap(bmp,new Rectangle(0,0,intro.Width,intro.Height));bmp.Save(Path.Combine(args[1],"morbid-intro.png"));}};
-     intro.ShowDialog();if(intro.ElapsedSeconds<2.8 || intro.ElapsedSeconds>6)throw new Exception("Intro duration regression");
+     intro.ShowDialog();if(intro.ElapsedSeconds<4.7 || intro.ElapsedSeconds>10)throw new Exception("Splash closed before the game-window readiness gate settled");
     }
-    File.WriteAllText(Path.Combine(args[1],"panel-validation.txt"),"PASS: clear rounded panel and boxed clock; hide/F8/edge restoration; dock badge positioning and shared scale; borderless monitor and style restoration; right-drag; six named days/hours/minutes/seconds timers; countdown/reset and state persistence; three-second intro closes automatically.\r\n");return 0;
+    File.WriteAllText(Path.Combine(args[1],"panel-validation.txt"),"PASS: clear rounded panel and boxed clock; hide/F8/edge restoration; dock badge positioning and shared scale; borderless monitor and style restoration; right-drag; six named days/hours/minutes/seconds timers; countdown/reset and state persistence; full-monitor black splash waits for stable game-window readiness.\r\n");return 0;
    }
    int pid=0;for(int i=0;i+1<args.Length;i++)if(args[i]=="--attach")Int32.TryParse(args[i+1],out pid);
    if(pid==0){string game=GamePaths.InstalledGame();if(game!=null)foreach(var p in Process.GetProcessesByName("Prime"))try{if(String.Equals(Path.GetDirectoryName(p.MainModule.FileName),game,StringComparison.OrdinalIgnoreCase)){pid=p.Id;break;}}catch{}finally{p.Dispose();}}
