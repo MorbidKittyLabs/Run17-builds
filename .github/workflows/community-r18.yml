@@ -19,13 +19,19 @@ jobs:
           ref: 37e33084b711499c1ae3cc1988b58400c097546f
           path: source
       - run: python3 community-r18/prepare_source.py source
+      - name: Verify current Community Mod loading artwork and credit
+        run: |
+          test "$(git -C source hash-object assets/loadingscreen.png)" = "48f38d6ed1dab26a2dd02cb9605792df7779c7fe"
+          test "$(git -C source hash-object assets/stfc-mod-logo.png)" = "5dc641f0fbff42cadbd930a8ba593baecd2f8073"
+          test "$(git -C source hash-object assets/official-cc-logo.png)" = "c8f3490019c111c77f441be39566c8f703f6cccb"
+          git -C source diff --exit-code -- mods/src/patches/parts/loading_tip.cc
       - name: Check readers, one-request attacks, loader and transactional saves
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y libtomlplusplus-dev
-          for test_name in fleet_readings_policy pursuit_observer tactical_policy station_observer target_audit_policy community_panel_policy; do
+          for test_name in fleet_readings_policy pursuit_observer tactical_policy station_observer target_audit_policy community_panel_policy manual_hold; do
             g++ -std=c++23 -Wall -Wextra -Werror -fsanitize=address,undefined -I source/mods/src community-r18/tests/${test_name}_test.cc -o /tmp/${test_name}
             /tmp/${test_name}
           done
@@ -34,6 +40,8 @@ jobs:
           g++ -std=c++23 -Wall -Wextra -Werror -Wno-unused-parameter -fsanitize=address,undefined -I community-r18/tests/hostile_fakes -I source/mods/src community-r18/tests/manual_attack_test.cc -o /tmp/manual-attack
           /tmp/manual-attack
           g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/settings_save_test.cc source/mods/src/toml_editor.cc source/mods/src/config_save.cc -ltomlplusplus -o /tmp/settings-save
+          g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/community_loading_test.cc source/mods/src/toml_editor.cc -ltomlplusplus -o /tmp/community-loading
+          /tmp/community-loading
           mkdir /tmp/settings-fixture
           /tmp/settings-save /tmp/settings-fixture
           g++ -std=c++23 -Wall -Wextra -Werror -I source/mods/src community-r18/tests/system_zoom_save_test.cc -o /tmp/zoom-save
@@ -92,7 +100,7 @@ jobs:
         shell: pwsh
         run: |
           python scripts/stamp-version-hash.py $env:GITHUB_SHA
-          xmake f -p windows -a x64 -m release -y
+          xmake f -p windows -a x64 -m release --use_original_bg=n -y
           if ($LASTEXITCODE -ne 0) { throw 'XMake configure failed' }
       - name: Save completed dependency installation
         if: steps.restore-packages.outputs.cache-hit != 'true'

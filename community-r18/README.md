@@ -1,15 +1,11 @@
-# Morbid Kitty — Run17 Build 18
+# Morbid Kitty — STFC Community
 
-[![INSTALL](https://img.shields.io/badge/INSTALL-Morbid_Kitty-149BD3?style=for-the-badge)](RELEASE_DOWNLOAD_BASE/MorbidKitty-Setup.exe)
+**Close STFC, open MorbidKitty-Setup, and click INSTALL.** Then use the new Morbid Kitty desktop shortcut.
 
-**Open the installer, then click INSTALL.** It finds STFC or lets you browse to `Prime.exe`, backs up/replaces the DLL, installs the tools, preserves existing settings, and creates the Morbid Kitty desktop shortcut.
+A brief Morbid Kitty intro leads into Community Mod's own loading artwork. The compact controller has ship shortcuts, a clock, six named timers, Store, voice typing, Save Settings and Diagnostics.
 
-A three-second Morbid Kitty-and-Teddy intro closes automatically, followed by the normal loading screens. The clear-background, rounded vertical HUD panel includes the boxed clock, six saved reminders with days/hours/minutes/seconds, Store, Windows voice typing, verified Save Settings, Diagnostics and ship buttons 1–8. F8 restores hidden controls; F9 toggles borderless/windowed play. Ship buttons show available assigned docks and select/locate with one click. Red X hides controls; Store X closes Store; purple X closes the game. F6 makes one select-and-attack request; F7 recalls this account's eligible ships.
+**F8 brings the controller back. F9 switches borderless/windowed play.** Right-drag the controls to move them.
 
-Troubleshooting tools and their source are included. Click **Diag** on the HUD panel or run `Collect-Diagnostics.bat` to create a local diagnostic ZIP for review; nothing is uploaded.
+[Installation and controls](community-r18/README-FIRST.txt) · [Diagnostics](community-r18/DIAGNOSTICS.md)
 
-Read [the installation and feature guide](community-r18/README-FIRST.txt) and [the complete diagnostic coverage and privacy guide](community-r18/DIAGNOSTICS.md).
-
-The mining-node return view remains unresolved. HUD positioning/visibility and gameplay behavior need live verification on your client and UI scale.
-
-Built on [NetNiV's STFC Community Mod](https://github.com/STFC-Mod/mod), pinned at `37e33084b711499c1ae3cc1988b58400c097546f`. GPL-3.0; source, Defender/ClamAV reports and checksums are release assets. Morbid Kitty branding is a brief startup introduction, not a replacement for the Community Mod's loading artwork or credits.
+Built on [STFC Community Mod](https://github.com/STFC-Mod/mod) by NetNiV and contributors, with settings-saving work from [Guffawaffle/stfc-mod](https://github.com/Guffawaffle/stfc-mod). Morbid Kitty additions by Morbid Kitty Labs. GPL-3.0; see LICENSE. Corresponding source accompanies the build.

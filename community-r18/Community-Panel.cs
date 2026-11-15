@@ -289,7 +289,7 @@ public sealed class CommunityPanel:Form {
   var buttons=Controls.OfType<Button>().ToArray();
   for(int i=0;i<buttons.Length;i++)for(int j=i+1;j<buttons.Length;j++)if(buttons[i].Bounds.IntersectsWith(buttons[j].Bounds))throw new Exception("Buttons overlap");
   LayoutShips(0x0f);
-  using(var bmp=new Bitmap(Width,Height)){DrawToBitmap(bmp,new Rectangle(0,0,Width,Height));bmp.Save(Path.Combine(directory,"community-panel.png"));}
+  using(var bmp=new Bitmap(Width,Height)){DrawToBitmap(bmp,new Rectangle(0,0,Width,Height));bmp.MakeTransparent(TransparencyKey);bmp.Save(Path.Combine(directory,"community-panel.png"));}
   VerifyInteraction();ShowTimers();Application.DoEvents();
   using(var bmp=new Bitmap(timerWindow.Width,timerWindow.Height)){timerWindow.DrawToBitmap(bmp,new Rectangle(0,0,timerWindow.Width,timerWindow.Height));bmp.Save(Path.Combine(directory,"community-timers.png"));}
  }

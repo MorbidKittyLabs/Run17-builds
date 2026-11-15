@@ -283,12 +283,48 @@ index 0000000..f68c06c
 +void Summarize(unsigned expected) noexcept;
 +void Event(std::string_view name, std::string_view detail) noexcept;
 +}
+diff --git a/mods/src/community_loading_policy.h b/mods/src/community_loading_policy.h
+new file mode 100644
+index 0000000..93b4527
+--- /dev/null
++++ b/mods/src/community_loading_policy.h
+@@ -0,0 +1,30 @@
++#pragma once
++#include "toml_editor.h"
++#include <stdexcept>
++#include <string>
++#include <vector>
++
++namespace community_loading {
++inline std::string Restore(const std::string& original) {
++ using namespace config_edit;
++ const auto before=toml::parse(original);
++ if(before["community_saved"]["community_loading_restored"].value_or(false))return original;
++ struct Setting {const char* section;const char* key;Value value;};
++ const std::vector<Setting> settings={
++  {"graphics","loader_enabled",true},{"graphics","loader_transition",true},
++  {"graphics","loader_transition_black",false},{"graphics","loader_tip_enabled",true},
++  {"graphics","loader_image",std::string{}},{"graphics","loader_logo_scale",1.0},
++  {"patches","loadingscreenhooks",true},{"patches","transitionscreenhooks",true},
++  {"patches","loadingtiphooks",true},{"community_saved","community_loading_restored",true}
++ };
++ std::string current=original;TomlEditor editor;
++ for(const auto& setting:settings){
++  const auto parsed=toml::parse(current);const auto* section=parsed.get_as<toml::table>(setting.section);
++  const auto* node=section?section->get(setting.key):nullptr;std::optional<Value> expected;
++  if(node){if(node->is_boolean())expected=node->as_boolean()->get();else if(node->is_string())expected=node->as_string()->get();else if(node->is_integer())expected=node->as_integer()->get();else if(node->is_floating_point())expected=node->as_floating_point()->get();else throw std::runtime_error("Unsupported loading setting type");}
++  const auto edit=editor.Prepare(current,{setting.section,setting.key,expected,setting.value});
++  if(edit.outcome==Outcome::Prepared)current=edit.text;else if(edit.outcome!=Outcome::AlreadySaved)throw std::runtime_error("Loading configuration update rejected");
++ }
++ (void)toml::parse(current);return current;
++}
++}
 diff --git a/mods/src/community_panel.cc b/mods/src/community_panel.cc
 new file mode 100644
-index 0000000..1026b36
+index 0000000..daa73b8
 --- /dev/null
 +++ b/mods/src/community_panel.cc
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,187 @@
 +#include "community_panel.h"
 +#if _WIN32
 +#include "community_panel_policy.h"
@@ -419,6 +455,7 @@ index 0000000..1026b36
 +  }else spdlog::warn("[CommunityPanel] Companion could not start; Windows error {}",GetLastError());
 + }catch(...){ /* Keep the game's startup unchanged if the optional companion is unavailable. */ }
 +}
++bool ManualInputReady() noexcept {return !published || (published->visible==1 && published->section==static_cast<int>(SectionID::Navigation_System));}
 +void Pump() noexcept {
 + try {
 +  if(!published)return;
@@ -473,16 +510,16 @@ index 0000000..1026b36
 +}
 +}
 +#else
-+namespace community_panel {void Start() noexcept {}void ObserveHud(void*) noexcept {}void Pump() noexcept {}}
++namespace community_panel {void Start() noexcept {}void ObserveHud(void*) noexcept {}void Pump() noexcept {}bool ManualInputReady() noexcept {return true;}}
 +#endif
 diff --git a/mods/src/community_panel.h b/mods/src/community_panel.h
 new file mode 100644
-index 0000000..15dabbb
+index 0000000..a1541cf
 --- /dev/null
 +++ b/mods/src/community_panel.h
 @@ -0,0 +1,2 @@
 +#pragma once
-+namespace community_panel {void Start() noexcept;void ObserveHud(void*) noexcept;void Pump() noexcept;}
++namespace community_panel {void Start() noexcept;void ObserveHud(void*) noexcept;void Pump() noexcept;bool ManualInputReady() noexcept;}
 diff --git a/mods/src/community_panel_policy.h b/mods/src/community_panel_policy.h
 new file mode 100644
 index 0000000..bd801de
@@ -512,16 +549,18 @@ index 0000000..bd801de
 +}
 +}
 diff --git a/mods/src/config.cc b/mods/src/config.cc
-index 8102a74..878b5ee 100644
+index 8102a74..13dcedb 100644
 --- a/mods/src/config.cc
 +++ b/mods/src/config.cc
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,7 @@
  #include "config.h"
 +#include "single_settings_save.h"
++#include "community_loading_policy.h"
++#include "config_save.h"
  #include "file.h"
  #include "patches/mapkey.h"
  #include "prime/KeyCode.h"
-@@ -253,6 +254,7 @@ float Config::GetDPI()
+@@ -253,6 +256,7 @@ float Config::GetDPI()
  
  void Config::AdjustUiScale(bool scaleUp)
  {
@@ -529,7 +568,7 @@ index 8102a74..878b5ee 100644
    if (this->ui_scale != 0.0f) {
      auto old_scale    = this->ui_scale;
      auto scale_factor = (scaleUp ? 1.0f : -1.0f) * this->ui_scale_step;
-@@ -267,6 +269,7 @@ void Config::AdjustUiScale(bool scaleUp)
+@@ -267,6 +271,7 @@ void Config::AdjustUiScale(bool scaleUp)
  
  void Config::AdjustUiViewerScale(bool scaleUp)
  {
@@ -537,7 +576,25 @@ index 8102a74..878b5ee 100644
    if (this->ui_scale_viewer != 0.0f) {
      auto old_scale        = this->ui_scale_viewer;
      auto scale_factor     = (scaleUp ? 1.0f : -1.0f) * this->ui_scale_step;
-@@ -1140,6 +1143,8 @@ void Config::Load()
+@@ -946,6 +951,17 @@ void Config::Load()
+   bool        write_config = false;
+   bool        write_log    = true;
+   try {
++    // Restore only inherited loading-screen overrides, once per configuration.
++    // The transactional editor preserves unrelated settings and comments.
++    try {
++      const auto path=std::filesystem::path(std::string(File::MakePath(filename)));
++      if(std::filesystem::exists(path)){
++        const auto original=ReadConfigText(path);const auto restored=community_loading::Restore(original);
++        if(restored!=original){auto backup=path;backup+=".before-community-loading.bak";ReplaceConfigText(backup,original);
++          if(!ReplaceConfigText(path,restored,original))throw std::runtime_error("Configuration changed during loading-art restoration");
++          spdlog::info("[CommunityLoading] Restored upstream artwork, logos, loading tips and hook switches; unrelated settings preserved");}
++      }
++    }catch(const std::exception& e){spdlog::warn("[CommunityLoading] Could not restore loading settings: {}",e.what());}
+     config       = std::move(toml::parse_file(File::MakePath(filename)));
+     write_config = true;
+   } catch (const toml::parse_error& e) {
+@@ -1140,6 +1156,8 @@ void Config::Load()
        get_config_or_default(config, parsed, "ui", "disable_escape_exit", DCU::disable_escape_exit, write_config);
    this->disable_escape_exit_timer = get_config_or_default(config, parsed, "ui", "disable_escape_exit_timer",
                                                            DCU::disable_escape_exit_timer, write_config);
@@ -546,7 +603,7 @@ index 8102a74..878b5ee 100644
    this->disable_preview_locate =
        get_config_or_default(config, parsed, "ui", "disable_preview_locate", DCU::disable_preview_locate, write_config);
    this->disable_preview_recall =
-@@ -1436,10 +1441,14 @@ void Config::Load()
+@@ -1436,10 +1454,14 @@ void Config::Load()
    parse_config_shortcut(config, parsed, "focus_search", GameFunction::FocusSearch, DCSH::focus_search);
  
    parse_config_shortcut(config, parsed, "action_primary", GameFunction::ActionPrimary, DCSH::action_primary);
@@ -1601,6 +1658,29 @@ index 0000000..5ec3d55
 +         std::clamp(far_source?(minimum-ratio)/span:(ratio-maximum)/span,0.0f,1.0f)};
 +}
 +}
+diff --git a/mods/src/manual_hold_policy.h b/mods/src/manual_hold_policy.h
+new file mode 100644
+index 0000000..27f5fcb
+--- /dev/null
++++ b/mods/src/manual_hold_policy.h
+@@ -0,0 +1,17 @@
++#pragma once
++#include <cstdint>
++namespace manual_hold {
++struct Decision {bool request=false,cancel=false;};
++struct Gate {
++ bool armed=false,repeating=false;std::int64_t began=0,last=0;
++ Decision Tick(bool pressed,bool held,bool eligible,bool ready,std::int64_t now){
++  if(!eligible){bool cancel=armed||repeating;*this={};return {false,cancel};}
++  if(pressed){armed=held;repeating=false;began=last=now;return {true,false};}
++  if(!held){bool cancel=repeating;*this={};return {false,cancel};}
++  if(!armed)return {};
++  if(now-began>=400)repeating=true;
++  if(repeating&&ready&&now-last>=500){last=now;return {true,false};}
++  return {};
++ }
++};
++}
 diff --git a/mods/src/patches/gamefunctions.h b/mods/src/patches/gamefunctions.h
 index 7c2c8ba..0a4a07b 100644
 --- a/mods/src/patches/gamefunctions.h
@@ -1715,13 +1795,14 @@ index f267e48..0129de5 100644
    auto orbit =
 diff --git a/mods/src/patches/parts/hostile_action.cc b/mods/src/patches/parts/hostile_action.cc
 new file mode 100644
-index 0000000..684fac6
+index 0000000..88f8c99
 --- /dev/null
 +++ b/mods/src/patches/parts/hostile_action.cc
-@@ -0,0 +1,289 @@
+@@ -0,0 +1,306 @@
 +#include "patches/parts/hostile_action.h"
 +#include "patches/parts/hostile_target_audit.h"
 +#include "errormsg.h"
++#include "manual_hold_policy.h"
 +
 +
 +#include "prime/FleetBarViewController.h"
@@ -2008,12 +2089,28 @@ index 0000000..684fac6
 +    release(StatusName(probe.status));
 +  }
 +}
++
++namespace {manual_hold::Gate held_gate;uint64_t held_ship=0;}
++void ResetHeldSelectAttackHostile(){held_gate={};held_ship=0;CancelSelectAttackHostile("held input interrupted");}
++void UpdateHeldSelectAttackHostile(FleetBarViewController* bar,bool pressed,bool held,bool eligible){
++ auto* own=SelectedFleet(bar);eligible=eligible&&InSystem()&&own&&own->Id;
++ if(pressed&&own)held_ship=own->Id;
++ if(held_ship&&own&&held_ship!=own->Id){ResetHeldSelectAttackHostile();pressed=false;}
++ const auto pending=own?pursuits.find(own->Id):pursuits.end();
++ const bool awaiting=pending!=pursuits.end()&&pending->second.awaiting_attack;
++ std::string reason;const bool ready=eligible&&own->CurrentState==FleetState::IdleInSpace&&!awaiting&&!hostile_audit::TacticalBusy(own,reason);
++ const auto decision=held_gate.Tick(pressed,held,eligible,ready,NowMs());
++ if(decision.cancel)CancelSelectAttackHostile("held input released or unavailable");
++ if(!held&&!pressed)held_ship=0;
++ if(eligible)UpdateSelectAttackHostile(bar,decision.request);
++ else CancelSelectAttackHostile("manual input unavailable");
++}
 diff --git a/mods/src/patches/parts/hostile_action.h b/mods/src/patches/parts/hostile_action.h
 new file mode 100644
-index 0000000..95b040b
+index 0000000..b164f31
 --- /dev/null
 +++ b/mods/src/patches/parts/hostile_action.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,21 @@
 +#pragma once
 +
 +#include <cstdint>
@@ -2032,6 +2129,9 @@ index 0000000..95b040b
 +bool                 VisibleHostileKnownDestroyed(int64_t fleet_id);
 +void                 UpdateSelectAttackHostile(FleetBarViewController* fleet_bar, bool pressed);
 +void                 CancelSelectAttackHostile(const char* reason = "interrupted");
++
++void UpdateHeldSelectAttackHostile(FleetBarViewController* bar,bool pressed,bool held,bool eligible);
++void ResetHeldSelectAttackHostile();
 diff --git a/mods/src/patches/parts/hostile_target_audit.cc b/mods/src/patches/parts/hostile_target_audit.cc
 new file mode 100644
 index 0000000..7243166
@@ -3084,7 +3184,7 @@ index 0000000..7186a1b
 +};
 +} // namespace hostile_audit
 diff --git a/mods/src/patches/parts/hotkeys.cc b/mods/src/patches/parts/hotkeys.cc
-index 8592d89..51fbddb 100644
+index 8592d89..5c0986b 100644
 --- a/mods/src/patches/parts/hotkeys.cc
 +++ b/mods/src/patches/parts/hotkeys.cc
 @@ -1,5 +1,14 @@
@@ -3341,26 +3441,46 @@ index 8592d89..51fbddb 100644
    if (!Config::Get().installHotkeyHooks) {
      return original(_this);
    }
-@@ -780,10 +1006,12 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -721,6 +947,13 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+   static int32_t                                            last_ship_select_request = -1;
+-
++
+   Key::ResetCache();
++  bool manual_input_ready=!Key::IsInputFocused()&&!Hub::IsInChat()&&community_panel::ManualInputReady();
++#if _WIN32
++  DWORD input_pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&input_pid);
++  manual_input_ready=manual_input_ready&&input_pid==GetCurrentProcessId();
++#endif
++  if(!manual_input_ready)ResetHeldSelectAttackHostile();
++
+-
++
+   if (MapKey::IsDown(GameFunction::DisableHotKeys)) {
+     if (shortcut_hints_ready) {
+@@ -780,10 +1013,12 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
    }
  
    if (Config::Get().use_scopely_hotkeys && Config::Get().hotkeys_enabled) {
-+    CancelSelectAttackHostile("native shortcuts enabled");
++    ResetHeldSelectAttackHostile();
      return original(_this);
    }
  
    if (!Config::Get().hotkeys_enabled) {
-+    CancelSelectAttackHostile("shortcuts disabled");
++    ResetHeldSelectAttackHostile();
      return;
    }
  
-@@ -800,4 +1028,4 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -797,7 +1032,7 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+   const auto is_in_chat = Hub::IsInChat();
+   const auto config     = &Config::Get();
+-
++
 -  if (MapKey::IsDown(GameFunction::Restart)) {
 +  if (MapKey::IsDown(GameFunction::Restart) && !Config::Get().community_panel_enabled) {
      spdlog::info("Clearing localisation cache and restarting");
      LanguageManager::ClearCache();
      Hub::get_App()->Reload();
-@@ -1172,7 +1400,26 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -1172,7 +1407,26 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
      }
    }
  
@@ -3369,7 +3489,7 @@ index 8592d89..51fbddb 100644
 +  }
    if (!Key::IsInputFocused()) {
 +    if(MapKey::IsDown(GameFunction::ActionRecallAll)) {
-+      CancelSelectAttackHostile("manual recall all");
++      ResetHeldSelectAttackHostile();
 +      fleet_diagnostics::RecallAll();
 +      return;
 +    }
@@ -3379,15 +3499,15 @@ index 8592d89..51fbddb 100644
 +    const bool unrelated_action = Key::Pressed(KeyCode::Escape) || MapKey::IsDown(GameFunction::ActionPrimary)
 +                                  || MapKey::IsDown(GameFunction::ActionRecall);
 +    if (unrelated_action) {
-+      CancelSelectAttackHostile("other action key pressed");
++      ResetHeldSelectAttackHostile();
 +    } else {
-+      UpdateSelectAttackHostile(ObjectFinder<FleetBarViewController>::Get(), hostile_pressed);
++      UpdateHeldSelectAttackHostile(ObjectFinder<FleetBarViewController>::Get(), hostile_pressed,MapKey::IsPressed(GameFunction::ActionSelectAttackHostile),manual_input_ready);
 +    }
 +
      // Lets try to remove the pre-scan because we hit escape and it's visible
      if (Key::Pressed(KeyCode::Escape)) {
        if (config->primary_requires_visible_target) {
-@@ -1210,7 +1457,20 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -1210,7 +1464,20 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
  
      DailyFactionBulkClaimUpdate();
  
@@ -3409,7 +3529,7 @@ index 8592d89..51fbddb 100644
        auto all_pre_scan_widgets = ObjectFinder<PreScanTargetWidget>::GetAll();
  
        for (auto& pre_scan_widget : all_pre_scan_widgets) {
-@@ -1830,6 +2090,17 @@ void InstallShortcutHintHooks()
+@@ -1830,6 +2097,17 @@ void InstallShortcutHintHooks()
  
  void InstallHotkeyHooks()
  {
@@ -3427,7 +3547,7 @@ index 8592d89..51fbddb 100644
    auto shortcuts_manager_helper =
        il2cpp_get_class_helper("Assembly-CSharp", "Digit.Prime.GameInput", "ShortcutsManager");
    if (!shortcuts_manager_helper.isValidHelper()) {
-@@ -1872,6 +2143,7 @@ void InstallHotkeyHooks()
+@@ -1872,6 +2150,7 @@ void InstallHotkeyHooks()
    InstallShortcutHintHooks();
  
    install_screen_manager_update_hook();
@@ -3707,20 +3827,6 @@ index f782bf5..641b09d 100644
 + InstallHavenZoomHooks();
 + spdlog::info("[InteriorZoomV6] Native starting view and near range retained; outward extension available");
  }
-diff --git a/mods/src/patches/parts/loading_tip.cc b/mods/src/patches/parts/loading_tip.cc
-index 22461f6..10a01df 100644
---- a/mods/src/patches/parts/loading_tip.cc
-+++ b/mods/src/patches/parts/loading_tip.cc
-@@ -37,8 +37,7 @@ constexpr int kPassThroughChance  = 50;
- 
- std::string GetLoadingScreenTip()
- {
--  return "Welcome to Star Trek Fleet Command, Supported by the Community Mod v"
--         VER_FILE_VERSION_STR VERSION_PATCH_STR "! Please check our discord for the latest information!";
-+  return "Morbid Kitty Labs - Run17 Collective Trial v1 | Community Mod " VER_FILE_VERSION_STR;
- }
- 
- void SetTMPText(void* tmpObj, const std::string& text)
 diff --git a/mods/src/patches/parts/mission_hud_tweaks.cc b/mods/src/patches/parts/mission_hud_tweaks.cc
 index 8eeee11..8603c3b 100644
 --- a/mods/src/patches/parts/mission_hud_tweaks.cc
