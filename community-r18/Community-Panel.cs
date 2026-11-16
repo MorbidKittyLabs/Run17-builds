@@ -394,7 +394,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   var game=GameRectangle();if(game.IsEmpty)game=Screen.FromControl(this).WorkingArea;timerWindow.Location=new Point(Math.Max(game.Left,game.Right-timerWindow.Width-14),Math.Max(game.Top,game.Bottom-timerWindow.Height-14));
   string[] headings={"Name","Days","Hrs","Min","Sec","Time left"};int[] columns={8,112,152,192,232,276};
   for(int h=0;h<headings.Length;h++)timerWindow.Controls.Add(new Label{Text=headings[h],Bounds=new Rectangle(columns[h],7,h==0?98:h==5?80:38,18),BackColor=Color.Transparent,Cursor=Cursors.SizeAll});
-  var closeTimers=new GameButton{Text="X",Bounds=new Rectangle(468,3,28,28),ForeColor=Color.White,TopColor=Color.FromArgb(205,55,67),BottomColor=Color.FromArgb(119,24,36),AccessibleName="Close timer menu"};
+  var closeTimers=new GameButton{PreserveGameFocus=true,Text="X",Bounds=new Rectangle(468,3,28,28),ForeColor=Color.White,TopColor=Color.FromArgb(205,55,67),BottomColor=Color.FromArgb(119,24,36),AccessibleName="Close timer menu"};
   closeTimers.Click+=(o,e)=>{if(timerWindow!=null)timerWindow.Close();};timerWindow.Controls.Add(closeTimers);
   for(int i=0;i<6;i++){
    var a=state.Alarms[i];int y=33+i*33;
@@ -403,9 +403,9 @@ public sealed class CommunityPanel:Form,IMessageFilter {
    for(int part=0;part<4;part++){inputs[part]=new NumericUpDown{Minimum=0,Maximum=max[part],Value=Math.Max(0,Math.Min(max[part],values[part])),Bounds=new Rectangle(112+part*40,y,36,25),AccessibleName="Timer "+(i+1)+" "+headings[part+1]};timerWindow.Controls.Add(inputs[part]);}
    foreach(var input in inputs)input.ValueChanged+=(o,e)=>{a.DurationSeconds=(long)inputs[0].Value*86400+(long)inputs[1].Value*3600+(long)inputs[2].Value*60+(long)inputs[3].Value;a.Minutes=0;if(!a.Running)ResetAlarm(a);dirty=true;};
    var counter=new Label{Bounds=new Rectangle(276,y+4,80,21),TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.Transparent,Cursor=Cursors.SizeAll};countdowns.Add(counter);timerWindow.Controls.Add(counter);
-   var start=new GameButton{Bounds=new Rectangle(362,y,65,26),Text=a.Running?"Pause":"Start"};startButtons.Add(start);
+   var start=new GameButton{PreserveGameFocus=true,Bounds=new Rectangle(362,y,65,26),Text=a.Running?"Pause":"Start"};startButtons.Add(start);
    start.Click+=(o,e)=>{if(a.Running){a.Remaining=Remaining(a,DateTime.UtcNow);a.Running=false;}else{if(a.Remaining<=0)ResetAlarm(a);if(a.Remaining<=0){Status("Enter a nonzero timer duration",true);return;}a.EndUtc=DateTime.UtcNow.AddSeconds(a.Remaining);a.Running=true;}dirty=true;Persist();};timerWindow.Controls.Add(start);
-   var reset=new GameButton{Bounds=new Rectangle(432,y,64,26),Text="Reset"};reset.Click+=(o,e)=>{ResetAlarm(a);dirty=true;Persist();};timerWindow.Controls.Add(reset);
+   var reset=new GameButton{PreserveGameFocus=true,Bounds=new Rectangle(432,y,64,26),Text="Reset"};reset.Click+=(o,e)=>{ResetAlarm(a);dirty=true;Persist();};timerWindow.Controls.Add(reset);
   }
   foreach(Control c in timerWindow.Controls)timerBounds[c]=c.Bounds;ScaleTimerWindow(uiScale);
   timerWindow.FormClosed+=(o,e)=>{Persist();countdowns.Clear();startButtons.Clear();timerBounds.Clear();timerWindow=null;};timerWindow.Show(this);timerWindow.Activate();UpdateUi();
