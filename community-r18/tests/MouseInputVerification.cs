@@ -26,7 +26,7 @@ public static class MouseInputVerification {
  static void Require(bool condition,string message){if(!condition)throw new Exception(message);}
  static void Pump(int milliseconds=140){var clock=Stopwatch.StartNew();while(clock.ElapsedMilliseconds<milliseconds){Application.DoEvents();Thread.Sleep(5);}}
  static void MouseEvent(uint flags){var input=new Input{Value=new Union{Mouse=new Mouse{Flags=flags}}};Require(SendInput(1,new[]{input},Marshal.SizeOf(typeof(Input)))==1,"Windows did not accept mouse input: "+Marshal.GetLastWin32Error());Pump();}
- static void Move(Point p){SetCursorPos(p.X,p.Y);Pump();}
+ static void Move(Point p){SetCursorPos(p.X,p.Y);Pump();Require(Cursor.Position==p,"Requested click lies outside the visible desktop: "+p+" actual="+Cursor.Position);}
  static void Click(Control c){trace.Clear();trace.Add("CLICK "+c.AccessibleName+" hwnd="+c.Handle+" parent="+c.Parent.Handle+" foreground="+GetForegroundWindow()+" selectable="+c.CanSelect+" capture="+GetCapture());var point=c.PointToScreen(new Point(c.Width/2,c.Height/2));Move(point);trace.Add("WindowFromPoint="+WindowFromPoint(point)+" hit="+SendMessage(c.Handle,0x84,IntPtr.Zero,new IntPtr((point.X&65535)|(point.Y<<16))));Require(GetAncestor(WindowFromPoint(point),2)==c.FindForm().Handle,"Hit-test blocked "+c.AccessibleName+" at "+point+" form="+c.FindForm().Bounds+" foreground="+GetForegroundWindow());MouseEvent(2);MouseEvent(4);}
  static object Call(CommunityPanel panel,string method,params object[] args){return typeof(CommunityPanel).GetMethod(method,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(panel,args);}
  static Form Timers(CommunityPanel panel){return (Form)typeof(CommunityPanel).GetField("timerWindow",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(panel);}

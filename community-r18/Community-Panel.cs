@@ -391,7 +391,6 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   if(timerWindow!=null && !timerWindow.IsDisposed){timerWindow.Show();timerWindow.Activate();return;}
   countdowns.Clear();startButtons.Clear();
   timerWindow=new TimerMenu{Text="Six reminder timers",ClientSize=new Size(504,234),Font=timerFont,ForeColor=ForeColor};
-  var game=GameRectangle();if(game.IsEmpty)game=Screen.FromControl(this).WorkingArea;timerWindow.Location=new Point(Math.Max(game.Left,game.Right-timerWindow.Width-14),Math.Max(game.Top,game.Bottom-timerWindow.Height-14));
   string[] headings={"Name","Days","Hrs","Min","Sec","Time left"};int[] columns={8,112,152,192,232,276};
   for(int h=0;h<headings.Length;h++)timerWindow.Controls.Add(new Label{Text=headings[h],Bounds=new Rectangle(columns[h],7,h==0?98:h==5?80:38,18),BackColor=Color.Transparent,Cursor=Cursors.SizeAll});
   var closeTimers=new GameButton{PreserveGameFocus=true,Text="X",Bounds=new Rectangle(468,3,28,28),ForeColor=Color.White,TopColor=Color.FromArgb(205,55,67),BottomColor=Color.FromArgb(119,24,36),AccessibleName="Close timer menu"};
@@ -408,6 +407,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
    var reset=new GameButton{PreserveGameFocus=true,Bounds=new Rectangle(432,y,64,26),Text="Reset"};reset.Click+=(o,e)=>{ResetAlarm(a);dirty=true;Persist();};timerWindow.Controls.Add(reset);
   }
   foreach(Control c in timerWindow.Controls)timerBounds[c]=c.Bounds;ScaleTimerWindow(uiScale);
+  var game=GameRectangle();if(game.IsEmpty)game=Screen.FromControl(this).WorkingArea;timerWindow.Location=new Point(Math.Max(game.Left,game.Right-timerWindow.Width-14),Math.Max(game.Top,game.Bottom-timerWindow.Height-14));
   timerWindow.FormClosed+=(o,e)=>{Persist();countdowns.Clear();startButtons.Clear();timerBounds.Clear();timerWindow=null;};timerWindow.Show(this);timerWindow.Activate();UpdateUi();
  }
  void ScaleTimerWindow(float scale){
@@ -415,6 +415,8 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   timerWindow.SuspendLayout();
   foreach(var pair in timerBounds){var r=pair.Value;pair.Key.Bounds=new Rectangle((int)Math.Round(r.X*scale),(int)Math.Round(r.Y*scale),Math.Max(1,(int)Math.Round(r.Width*scale)),Math.Max(1,(int)Math.Round(r.Height*scale)));}
   timerWindow.Font=timerFont;timerWindow.ClientSize=new Size((int)Math.Round(504*scale),(int)Math.Round(234*scale));timerWindow.ResumeLayout();
+  var game=GameRectangle();if(game.IsEmpty)game=Screen.FromControl(this).WorkingArea;
+  timerWindow.Location=new Point(Math.Max(game.Left,Math.Min(timerWindow.Left,game.Right-timerWindow.Width)),Math.Max(game.Top,Math.Min(timerWindow.Top,game.Bottom-timerWindow.Height)));
  }
  void UpdateDockShortcuts(bool eligible,Rectangle game){
   if(hudView==null){foreach(var badge in dockShortcuts)badge.Hide();return;}
