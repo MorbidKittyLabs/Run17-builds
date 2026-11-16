@@ -23,6 +23,7 @@ public static class BeveledFace {
  public static void Paint(Graphics g,Rectangle area,string text,Font font,Color foreground,Color top,Color bottom,bool joinLeft=false,bool joinRight=false){if(area.Width<5||area.Height<5)return;g.SmoothingMode=SmoothingMode.AntiAlias;var outer=new Rectangle(1,1,area.Width-3,area.Height-3);using(var path=Shape(outer,5,!joinLeft,!joinRight))using(var brush=new LinearGradientBrush(area,top,bottom,LinearGradientMode.Vertical)){g.FillPath(brush,path);using(var pen=new Pen(Color.FromArgb(3,39,61),2))g.DrawPath(pen,path);}var inner=new Rectangle(3,3,area.Width-7,area.Height-7);using(var path=Shape(inner,3,!joinLeft,!joinRight))using(var pen=new Pen(Color.FromArgb(158,217,236)))g.DrawPath(pen,path);TextRenderer.DrawText(g,text,font,area,foreground,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}
 }
 public class GameButton:Button {
+ public bool PreserveGameFocus {set{SetStyle(ControlStyles.Selectable,!value);TabStop=!value;}}
  public Color TopColor=Color.FromArgb(26,155,211),BottomColor=Color.FromArgb(7,82,127);
  bool joinLeft,joinRight;
  public bool JoinLeft{get{return joinLeft;}set{joinLeft=value;UpdateShape();Invalidate();}}

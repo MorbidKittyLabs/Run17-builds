@@ -102,8 +102,8 @@ public sealed class TimerNotice:Form {
  public TimerNotice(string name,Font font,Action dismiss){
   AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   Text="Timer finished";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(6,51,79);Font=font;
-  caption=new GameButton{JoinRight=true,Text=name,Font=font,AccessibleName="Finished timer: "+name};
-  close=new GameButton{Text="X",JoinLeft=true,Font=font,ForeColor=Color.White,TopColor=Color.FromArgb(205,55,67),BottomColor=Color.FromArgb(119,24,36),AccessibleName="Dismiss finished timer"};
+  caption=new GameButton{PreserveGameFocus=true,JoinRight=true,Text=name,Font=font,AccessibleName="Finished timer: "+name};
+  close=new GameButton{PreserveGameFocus=true,Text="X",JoinLeft=true,Font=font,ForeColor=Color.White,TopColor=Color.FromArgb(205,55,67),BottomColor=Color.FromArgb(119,24,36),AccessibleName="Dismiss finished timer"};
   close.Click+=(o,e)=>dismiss();Controls.Add(caption);Controls.Add(close);Fit(name,600);
  }
  protected override bool ShowWithoutActivation{get{return true;}}
@@ -124,7 +124,7 @@ public sealed class DockShortcut:Form {
  public DockShortcut(int number,Action select){
   AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;BackColor=Color.Magenta;TransparencyKey=Color.Magenta;
-  button=new GameButton{Text=number.ToString(),Dock=DockStyle.Fill,AccessibleName="Select and locate ship "+number};button.Click+=(o,e)=>select();Controls.Add(button);
+  button=new GameButton{PreserveGameFocus=true,Text=number.ToString(),Dock=DockStyle.Fill,AccessibleName="Select and locate ship "+number};button.Click+=(o,e)=>select();Controls.Add(button);
  }
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
@@ -289,7 +289,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  void ExitPanel(){closing=true;Close();Application.ExitThread();}
  void ShutdownGame(){var game=RequireGame();store.Close();desktop.Restore();shuttingDown=true;PostMessage(game.Window,0x0010,IntPtr.Zero,IntPtr.Zero);}
  GameButton Make(string text,int x,int y,int width,int height,string tip,Action action) {
-  var b=new GameButton{Text=text,Bounds=new Rectangle(x,y,width,height),TopColor=Color.FromArgb(20,130,185),BottomColor=Color.FromArgb(5,69,112)};
+  var b=new GameButton{PreserveGameFocus=true,Text=text,Bounds=new Rectangle(x,y,width,height),TopColor=Color.FromArgb(20,130,185),BottomColor=Color.FromArgb(5,69,112)};
   b.FlatAppearance.BorderColor=Color.FromArgb(158,217,236);b.Click+=(s,e)=>{try{if(preview&&text=="Store")return;action();}catch(Exception ex){Status(ex.Message,true);}};
   Controls.Add(b);tips.SetToolTip(b,tip);return b;
  }
