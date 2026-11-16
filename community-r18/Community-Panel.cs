@@ -414,7 +414,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
    var reset=new GameButton{Bounds=new Rectangle(432,y,64,26),Text="Reset"};reset.Click+=(o,e)=>{ResetAlarm(a);dirty=true;Persist();};timerWindow.Controls.Add(reset);
   }
   foreach(Control c in timerWindow.Controls)timerBounds[c]=c.Bounds;ScaleTimerWindow(uiScale);
-  timerWindow.FormClosed+=(o,e)=>{Persist();countdowns.Clear();startButtons.Clear();timerBounds.Clear();timerWindow=null;};timerWindow.Show(this);UpdateUi();
+  timerWindow.FormClosed+=(o,e)=>{Persist();countdowns.Clear();startButtons.Clear();timerBounds.Clear();timerWindow=null;};timerWindow.Show(this);timerWindow.Activate();UpdateUi();
  }
  void ScaleTimerWindow(float scale){
   if(timerWindow==null)return;

@@ -22,7 +22,7 @@ public static class MouseInputVerification {
  static void Pump(int milliseconds=140){var clock=Stopwatch.StartNew();while(clock.ElapsedMilliseconds<milliseconds){Application.DoEvents();Thread.Sleep(5);}}
  static void MouseEvent(uint flags){var input=new Input{Value=new Union{Mouse=new Mouse{Flags=flags}}};Require(SendInput(1,new[]{input},Marshal.SizeOf(typeof(Input)))==1,"Windows did not accept mouse input: "+Marshal.GetLastWin32Error());Pump();}
  static void Move(Point p){SetCursorPos(p.X,p.Y);Pump();}
- static void Click(Control c){Move(c.PointToScreen(new Point(c.Width/2,c.Height/2)));MouseEvent(2);MouseEvent(4);}
+ static void Click(Control c){var point=c.PointToScreen(new Point(c.Width/2,c.Height/2));Move(point);Require(GetAncestor(WindowFromPoint(point),2)==c.FindForm().Handle,"Hit-test blocked "+c.AccessibleName+" at "+point+" form="+c.FindForm().Bounds+" foreground="+GetForegroundWindow());MouseEvent(2);MouseEvent(4);}
  static object Call(CommunityPanel panel,string method,params object[] args){return typeof(CommunityPanel).GetMethod(method,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(panel,args);}
  static Form Timers(CommunityPanel panel){return (Form)typeof(CommunityPanel).GetField("timerWindow",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(panel);}
  [STAThread] public static int Main(string[] args){
@@ -43,7 +43,7 @@ public static class MouseInputVerification {
       Require(GetForegroundWindow()==game.Handle,"Controller stole game focus: "+name);
      }
      Click(panel.Controls.OfType<Button>().Single(b=>b.Text=="Timers"));Require(Timers(panel)!=null&&Timers(panel).Visible,"Physical Timers click did not open editor");
-     var timer=Timers(panel);Click(timer.Controls.OfType<Button>().Single(b=>b.AccessibleName=="Close timer menu"));Require(Timers(panel)==null,"Physical timer X did not close editor");game.Activate();SetForegroundWindow(game.Handle);Pump();
+     var timer=Timers(panel);var timerClose=timer.Controls.OfType<Button>().Single(b=>b.AccessibleName=="Close timer menu");int closeClicks=0;timerClose.Click+=(o,e)=>closeClicks++;Click(timerClose);Require(Timers(panel)==null,"Physical timer X did not close editor; clicks="+closeClicks+" enabled="+timerClose.Enabled+" capture="+timer.Capture);game.Activate();SetForegroundWindow(game.Handle);Pump();
      Click(native);Require(nativeClicks>0,"Native game click was intercepted");int before=nativeClicks;Click(native);Require(nativeClicks==before+1,"Native game click was intercepted");
      Click(panel.Controls.OfType<Button>().Single(b=>b.AccessibleName=="Hide controller"));Require(!panel.Visible,"Physical controller X did not hide panel");Call(panel,"ShowMenu");Pump();
      var origin=panel.Location;var clock=panel.Controls.OfType<Label>().Single();var point=clock.PointToScreen(new Point(clock.Width/2,clock.Height/2));Move(point);MouseEvent(8);Move(new Point(point.X+30,point.Y+20));MouseEvent(16);Pump();Require(panel.Location==new Point(origin.X+30,origin.Y+20),"Physical right-drag failed");Require(!panel.Capture,"Right-drag retained mouse capture");
