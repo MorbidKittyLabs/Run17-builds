@@ -56,7 +56,7 @@ public sealed class GameDesktop:IDisposable {
 
 public sealed class SummonHandle:Form {
  public event EventHandler Summon;
- public SummonHandle(){Text="Morbid Kitty menu handle";AccessibleName="Click the green arrow to show the controller";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;ClientSize=new Size(12,42);BackColor=Color.Magenta;TransparencyKey=Color.Magenta;ForeColor=Color.FromArgb(157,255,93);Cursor=Cursors.Hand;Font=new Font("Tahoma",14,FontStyle.Bold);var tip=new ToolTip();tip.SetToolTip(this,"Click: show controls • F8 also restores them");FormClosed+=(s,e)=>tip.Dispose();}
+ public SummonHandle(){AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);Text="Morbid Kitty menu handle";AccessibleName="Click the green arrow to show the controller";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;ClientSize=new Size(12,42);BackColor=Color.Magenta;TransparencyKey=Color.Magenta;ForeColor=Color.FromArgb(157,255,93);Cursor=Cursors.Hand;Font=new Font("Tahoma",14,FontStyle.Bold);var tip=new ToolTip();tip.SetToolTip(this,"Click: show controls • F8 also restores them");FormClosed+=(s,e)=>tip.Dispose();}
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
  protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);TextRenderer.DrawText(e.Graphics,"‹",Font,ClientRectangle,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}

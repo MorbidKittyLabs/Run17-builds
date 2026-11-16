@@ -64,19 +64,6 @@ jobs:
           path: source
           show-progress: false
       - run: python community-r18/prepare_source.py source
-      - uses: xmake-io/github-action-setup-xmake@v1.2.5
-        with:
-          xmake-version: '3.1.0'
-      - id: cache-path
-        shell: pwsh
-        run: |
-          $dir=(xmake l -c 'import("core.package.package"); print(package.installdir())').Trim()
-          "dir=$dir" >> $env:GITHUB_OUTPUT
-      - uses: actions/cache/restore@v4
-        id: restore-packages
-        with:
-          path: ${{ steps.cache-path.outputs.dir }}
-          key: community-windows-xmake-3.1.0-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock') }}
       - name: Build tools and render the vertical panel and brief intro
         timeout-minutes: 4
         shell: pwsh
@@ -102,6 +89,19 @@ jobs:
           & $inputTest ui-evidence
           if ($LASTEXITCODE -ne 0) { if (Test-Path mouse-input-error.txt) { Get-Content mouse-input-error.txt }; throw 'Physical mouse input verification failed' }
 
+      - uses: xmake-io/github-action-setup-xmake@v1.2.5
+        with:
+          xmake-version: '3.1.0'
+      - id: cache-path
+        shell: pwsh
+        run: |
+          $dir=(xmake l -c 'import("core.package.package"); print(package.installdir())').Trim()
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache/restore@v4
+        id: restore-packages
+        with:
+          path: ${{ steps.cache-path.outputs.dir }}
+          key: community-windows-xmake-3.1.0-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock') }}
       - name: Stamp source and configure Windows dependencies
         working-directory: source
         shell: pwsh

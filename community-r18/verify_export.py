@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys
 FORBIDDEN=(b'DSE.Background',b'DSE-STFC',b'MorbidKitty.DSE',b'background_control::',
- b'controller_session',b'lease_until_tick_ms',b'PressDue(',b'owner_settings',b'minimized_f6_probe',b'CreateNamedPipeW')
+ b'controller_session',b'lease_until_tick_ms',b'PressDue(',b'owner_settings',b'minimized_f6_probe',b'CreateNamedPipeW',b'UpdateHeldSelectAttackHostile',b'manual_hold::')
 root=Path(sys.argv[1]);binary='--binary' in sys.argv
 paths=list(root.rglob('*'))
 checked=0

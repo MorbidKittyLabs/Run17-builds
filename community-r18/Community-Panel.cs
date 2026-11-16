@@ -74,7 +74,7 @@ public sealed class TimerAudio:IDisposable {
 public sealed class TimerMenu:Form,IMessageFilter {
  bool moving,filterInstalled;int dragButton;Point dragMouse,dragOrigin;
  public TimerMenu(){
-  AutoScaleMode=AutoScaleMode.None;
+  AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   FormBorderStyle=FormBorderStyle.None;ControlBox=false;MinimizeBox=false;MaximizeBox=false;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
   BackColor=Color.FromArgb(6,51,79);DoubleBuffered=true;
  }
@@ -100,7 +100,7 @@ public sealed class TimerMenu:Form,IMessageFilter {
 public sealed class TimerNotice:Form {
  readonly GameButton caption,close;
  public TimerNotice(string name,Font font,Action dismiss){
-  AutoScaleMode=AutoScaleMode.None;
+  AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   Text="Timer finished";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(6,51,79);Font=font;
   caption=new GameButton{JoinRight=true,Text=name,Font=font,AccessibleName="Finished timer: "+name};
   close=new GameButton{Text="X",JoinLeft=true,Font=font,ForeColor=Color.White,TopColor=Color.FromArgb(205,55,67),BottomColor=Color.FromArgb(119,24,36),AccessibleName="Dismiss finished timer"};
@@ -122,7 +122,7 @@ public sealed class DockShortcut:Form {
  readonly GameButton button;
  Font numberFont;
  public DockShortcut(int number,Action select){
-  AutoScaleMode=AutoScaleMode.None;
+  AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;BackColor=Color.Magenta;TransparencyKey=Color.Magenta;
   button=new GameButton{Text=number.ToString(),Dock=DockStyle.Fill,AccessibleName="Select and locate ship "+number};button.Click+=(o,e)=>select();Controls.Add(button);
  }
@@ -182,7 +182,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  readonly Dictionary<int,TimerNotice> timerNotices=new Dictionary<int,TimerNotice>();
  bool dirty;
  public CommunityPanel(int pid=0,bool showIntro=false,bool isPreview=false) {
-  AutoScaleMode=AutoScaleMode.None;
+  AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   preview=isPreview;attachedPid=pid;
   statePath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"STFC-Community","Panel.json");
   state=PanelStorage.Load(statePath);
@@ -478,7 +478,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  }
  public void WriteUiEvidence(string directory){
   Directory.CreateDirectory(directory);Show();Application.DoEvents();
-  if(Width>=Height)throw new Exception("Panel must be vertical");
+  if(Width>=Height)throw new Exception("Panel must be vertical: "+Size+" client="+ClientSize+" scale="+uiScale);
   if(!Controls.OfType<Button>().Any(b=>b.Text=="Diagnostics"))throw new Exception("Diagnostics button missing");
   foreach(Control c in Controls){if(!c.Visible)continue;if(!ClientRectangle.Contains(c.Bounds))throw new Exception("Control clipped: "+c.Text);}
   var buttons=Controls.OfType<Button>().ToArray();
