@@ -16,7 +16,7 @@ F9: switch between borderless play and the normal desktop window.
 F10: close STFC.
 Right-drag anywhere on the controller to move it.
 Click the small green arrow at the game's right edge to show hidden controls.
-Purple X by Timers: hide controls. Red X by Diagnostics: close STFC.
+Red X by Timers: hide controls. Purple X by Diagnostics: close STFC.
 Red X by Store: close Store only.
 Numbers on the ship docks: click once to go to that ship.
 Tap F6: select and attack a nearby hostile. F7: recall eligible ships.

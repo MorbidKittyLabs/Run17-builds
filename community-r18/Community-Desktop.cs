@@ -9,6 +9,14 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 public sealed class GameDesktop:IDisposable {
+ [ComImport,Guid("56FDF344-FD6D-11d0-958A-006097C9A090")] class TaskbarList {}
+ [ComImport,Guid("602D4995-B13A-429b-A66E-1935E44F4317"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+ interface ITaskbarList2 {
+  void HrInit();void AddTab(IntPtr h);void DeleteTab(IntPtr h);void ActivateTab(IntPtr h);void SetActiveAlt(IntPtr h);
+  void MarkFullscreenWindow(IntPtr h,[MarshalAs(UnmanagedType.Bool)]bool fullscreen);
+ }
+ static void MarkFullscreen(IntPtr h,bool full){object obj=null;try{obj=new TaskbarList();var taskbar=(ITaskbarList2)obj;taskbar.HrInit();taskbar.MarkFullscreenWindow(h,full);}catch(COMException){}finally{if(obj!=null)Marshal.FinalReleaseComObject(obj);}}
+
  [StructLayout(LayoutKind.Sequential)] struct Rect {public int Left,Top,Right,Bottom;}
  [StructLayout(LayoutKind.Sequential)] struct Point {public int X,Y;}
  [StructLayout(LayoutKind.Sequential)] struct Placement {public int Length,Flags,Show;public Point Min,Max;public Rect Normal;}
@@ -23,18 +31,19 @@ public sealed class GameDesktop:IDisposable {
  [DllImport("user32.dll")] static extern bool IsHungAppWindow(IntPtr h);
  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h,out Rect r);
  const int Decorations=0x00C00000|0x00040000|0x00080000;
- IntPtr window;int style;Placement original;Rectangle target;
+ IntPtr window;int style;Placement original;Rectangle target;bool marked;
  public void Apply(IntPtr handle) {
   if(handle==IntPtr.Zero || !IsWindow(handle) || IsIconic(handle))return;
   if(window!=handle){Restore();window=handle;style=GetWindowLong(window,-16);original=new Placement{Length=Marshal.SizeOf(typeof(Placement))};if(!GetWindowPlacement(window,ref original)){window=IntPtr.Zero;throw new InvalidOperationException("Could not record the original game window.");}}
   target=Screen.FromHandle(window).Bounds;
   int now=GetWindowLong(window,-16),wanted=(now&~Decorations)|unchecked((int)0x80000000);
   if(now!=wanted)SetWindowLong(window,-16,wanted);
+  if(!marked){MarkFullscreen(window,true);marked=true;}
   Rect r;if(!GetWindowRect(window,out r))return;
   if(now!=wanted || r.Left!=target.Left || r.Top!=target.Top || r.Right-r.Left!=target.Width || r.Bottom-r.Top!=target.Height)
    SetWindowPos(window,IntPtr.Zero,target.Left,target.Top,target.Width,target.Height,0x0020|0x0010|0x0004);
  }
- public void Restore(){if(window!=IntPtr.Zero && IsWindow(window)){SetWindowLong(window,-16,style);SetWindowPlacement(window,ref original);SetWindowPos(window,IntPtr.Zero,0,0,0,0,0x0020|0x0010|0x0004|0x0001|0x0002);}window=IntPtr.Zero;}
+ public void Restore(){if(window!=IntPtr.Zero && IsWindow(window)){MarkFullscreen(window,false);SetWindowLong(window,-16,style);SetWindowPlacement(window,ref original);SetWindowPos(window,IntPtr.Zero,0,0,0,0,0x0020|0x0010|0x0004|0x0001|0x0002);}window=IntPtr.Zero;marked=false;}
  public void Dispose(){Restore();}
  public static bool IsEstablished(IntPtr handle,bool borderless){
   if(handle==IntPtr.Zero||!IsWindow(handle)||!IsWindowVisible(handle)||IsIconic(handle)||IsHungAppWindow(handle))return false;
@@ -51,7 +60,7 @@ public sealed class SummonHandle:Form {
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
  protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);TextRenderer.DrawText(e.Graphics,"‹",Font,ClientRectangle,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}
- protected override void WndProc(ref Message m){if(m.Msg==0x0202||m.Msg==0x0205){if(Summon!=null)Summon(this,EventArgs.Empty);return;}base.WndProc(ref m);}
+ protected override void WndProc(ref Message m){if(m.Msg==0x0021){m.Result=new IntPtr(3);return;}if(m.Msg==0x0202||m.Msg==0x0205){if(Summon!=null)Summon(this,EventArgs.Empty);return;}base.WndProc(ref m);}
  public void Place(Rectangle game,int y){Location=new System.Drawing.Point(game.Right-Width,Math.Max(game.Top,Math.Min(y,game.Bottom-Height)));}
 }
 

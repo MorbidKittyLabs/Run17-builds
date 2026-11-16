@@ -158,7 +158,7 @@ public sealed class SetupForm:Form {
  readonly bool remove;readonly string desktop;string game;readonly TextBox location;readonly Label status;readonly Button install;bool installed,removed,needsAdmin;
  public SetupForm(string chosen,string desktopDirectory,bool uninstall){
   game=chosen??GamePaths.Find();desktop=desktopDirectory;remove=uninstall;
-  Text=uninstall?"Remove Morbid Kitty":"Install Morbid Kitty — Run17 R18";ClientSize=new Size(620,370);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
+  Text=uninstall?"Remove Morbid Kitty":"Install Morbid Kitty — Run17 R18 Input Fix";ClientSize=new Size(620,370);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;
   BackColor=Color.FromArgb(6,51,79);ForeColor=Color.WhiteSmoke;Font=new Font("Tahoma",10);
   var title=new Label{Text=uninstall?"Remove Morbid Kitty — Run17 R18":"A little Morbid for your STFC",Font=new Font("Tahoma",18,FontStyle.Bold),Bounds=new Rectangle(24,22,570,34)};Controls.Add(title);
   var explanation=new Label{Text=uninstall?"Restore the previous DLL and remove the installed shortcut and tools.":"Run17 R18 • One account • Diagnostics and manual shortcuts\nFull-screen Morbid Kitty intro, followed by the normal STFC loading screens.",Bounds=new Rectangle(26,70,568,55)};Controls.Add(explanation);

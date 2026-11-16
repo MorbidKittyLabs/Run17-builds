@@ -4,76 +4,76 @@ index 33c835d..a079286 100644
 +++ b/example_community_patch_settings_en.toml
 @@ -146,7 +146,7 @@ fr_scale = 2.0
  transition_time = 0.01
-
+ 
  # This specifies the amount to scale the UI by, 1.0 being default
 -ui_scale = 0.6
 +ui_scale = 0.0
-
+ 
  # This specifies the amount to scale the ship models in System View, 1.0 being default
  ui_scale_ship = 1.0
 @@ -155,7 +155,7 @@ ui_scale_ship = 1.0
  ui_scale_step = 0.05
-
+ 
  # This specifies the amount to scale the UI Object Viewers by, 1.0 being default
 -ui_scale_viewer = 1.2
 +ui_scale_viewer = 1.0
-
+ 
  # Subgroup: Fleet Labels
  # ----------------------
 @@ -196,7 +196,7 @@ system_pan_momentum_falloff = 0.8
  # ----------------
-
+ 
  # Set to true to use the loader_image for the loading screen
 -loader_enabled = true
 +loader_enabled = false
-
+ 
  # Path to the custom loading screen image (leave blank for embedded image)
  loader_image = ""
 @@ -205,10 +205,10 @@ loader_image = ""
  loader_logo_scale = 1.0
-
+ 
  # Show the custom tip on the loading screen
 -loader_tip_enabled = true
 +loader_tip_enabled = false
-
+ 
  # Set to true to use the loader image for the transition screen
 -loader_transition = true
 +loader_transition = false
-
+ 
  # Use a black background instead of the custom image during transitions
  loader_transition_black = false
 @@ -235,7 +235,7 @@ use_presets_as_default = true
  # --------------
-
+ 
  # Set to 0.0 to disable custom zoom; enter system at specified zoom otherwise
 -default_system_zoom = 1750.0
 +default_system_zoom = -1
-
+ 
  # Maximum zoom-out distance in Haven; 0 preserves native behavior.
  haven_zoom = 4000.0
 @@ -478,6 +478,10 @@ toggle_shortcut_hints = "HOME"
  # SPACE or Mouse1
  action_primary = "SPACE|MOUSE1"
-
+ 
 +# Select the next visible regular hostile and engage when its target panel is ready.
 +# Requires zoomhooks and hotkeyhooks; use a key distinct from action_primary.
 +action_select_attack_hostile = "F6"
 +
  # Requires Kir'Shara
  action_queue = "SPACE|MOUSE1"
-
+ 
 @@ -497,6 +501,8 @@ toggle_queue = "CTRL-Q"
  # -------------------------
-
+ 
  # R or Mouse3
 +save_settings = "F12"
 +action_recall_all = "F7"
  action_recall = "R|MOUSE3"
-
+ 
  # SPACE or Mouse1
 @@ -705,6 +711,9 @@ zoom_reset = "="
  #  <[===================================================================]>
-
+ 
  [ui]
 +# Optional HUD companion and short startup introduction.
 +community_panel_enabled = true
@@ -343,7 +343,7 @@ index 0000000..0a49662
 +}
 diff --git a/mods/src/community_panel.cc b/mods/src/community_panel.cc
 new file mode 100644
-index 0000000..e88070c
+index 0000000..0097649
 --- /dev/null
 +++ b/mods/src/community_panel.cc
 @@ -0,0 +1,240 @@
@@ -555,7 +555,7 @@ index 0000000..e88070c
 +    }
 +  }
 +  for(int i=0;i<8;i++)if(ship_requests[i] && WaitForSingleObject(ship_requests[i],0)==WAIT_OBJECT_0){
-+    auto* bar=fleet_ready?ObjectFinder<FleetBarViewController>::Get():nullptr;
++    auto* bar=fleet_ready?ActiveFleetBar():nullptr;
 +    const bool allowed=foreground==GetCurrentProcessId();
 +    int position=-1;auto* context=bar?bar->CanvasContext():nullptr;auto* data=context?context->FleetData():nullptr;
 +    if(data&&data->max_length<=8)for(size_t p=0;p<data->max_length;p++) {
@@ -565,7 +565,7 @@ index 0000000..e88070c
 +    ship_result=ok?i+1:-(i+1);++ship_sequence;
 +    spdlog::info("[CommunityPanel] explicit ship select/locate dock={} accepted={}",i+1,ok);
 +  }
-+  auto* bar=fleet_ready?ObjectFinder<FleetBarViewController>::Get():nullptr;
++  auto* bar=fleet_ready?ActiveFleetBar():nullptr;
 +  DockRect docks[8]{};uint32_t dock_mask=0;
 +  if(bar&&Rendered(reinterpret_cast<Il2CppObject*>(bar))) {
 +   DiscoverDocks(bar,now);
@@ -625,10 +625,10 @@ index 0000000..b2bc7ec
 +}
 diff --git a/mods/src/community_panel_ui.inc b/mods/src/community_panel_ui.inc
 new file mode 100644
-index 0000000..7c9621d
+index 0000000..6281cee
 --- /dev/null
 +++ b/mods/src/community_panel_ui.inc
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,184 @@
 +// Runtime UI observation. Included inside community_panel's private namespace.
 +// No new detours: all managed calls run in the existing main-thread Pump.
 +Il2CppClass* UiClass(const char* assembly,const char* ns,const char* name) {
@@ -686,7 +686,7 @@ index 0000000..7c9621d
 + if(std::strcmp(il2cpp_class_get_name(context->klass),"FleetPlayerData")==0) {
 +  auto* fleet=reinterpret_cast<FleetPlayerData*>(context);return fleet->Hull?fleet->Index:-1;
 + }
-+ for(auto name:{"Fleet","FleetData","FleetPlayerData","Data"})if(auto* value=Reference(context,name)) {
++ for(auto name:{"fleet","Fleet","fleetData","FleetData","FleetPlayerData","Data"})if(auto* value=Reference(context,name)) {
 +  auto index=FleetIndex(value,depth+1);if(index>=0)return index;
 + }
 + // Context backing fields vary by client version. Accept only typed instance references.
@@ -700,6 +700,14 @@ index 0000000..7c9621d
 +  }
 + }
 + return -1;
++}
++FleetBarViewController* ActiveFleetBar() {
++ for(auto* bar:ObjectFinder<FleetBarViewController>::GetAll())
++  if(bar&&Rendered(reinterpret_cast<Il2CppObject*>(bar))) {
++   auto* context=bar->CanvasContext();auto* data=context?context->FleetData():nullptr;
++   if(data&&data->max_length>0&&data->max_length<=8)return bar;
++  }
++ return nullptr;
 +}
 +void DiscoverDocks(FleetBarViewController* bar,uint64_t now) {
 + if(now<next_dock_scan)return;next_dock_scan=now+1000;
@@ -725,13 +733,13 @@ index 0000000..7c9621d
 +   }
 +   continue;
 +  }
-+  if(type.find("Fleet")==std::string_view::npos||type.find("BarViewController")!=std::string_view::npos)continue;
++  if((type.find("Fleet")==std::string_view::npos&&type.find("ShipBarItem")==std::string_view::npos)||type=="FleetBarViewController")continue;
 +  int index=FleetIndex(Reference(item,"CanvasContext"));if(index<0)index=FleetIndex(Reference(item,"Context"));if(index<0)index=FleetIndex(item);
 +  if(index<0||index>=8||dock_widgets[index])continue;
 +  dock_widgets[index]=il2cpp_gchandle_new_weakref(item,false);
 + }
 +}
-+bool DockBounds(Il2CppObject* item,DockRect& rect) {
++bool ExactDockBounds(Il2CppObject* item,DockRect& rect) {
 + if(!Rendered(item))return false;
 + auto* transform=Reference(item,"transform");if(!transform)return false;
 + static auto* vector=UiClass("UnityEngine.CoreModule","UnityEngine","Vector3");
@@ -759,6 +767,13 @@ index 0000000..7c9621d
 + const float w=get_width?static_cast<float>(get_width()):0,h=get_height?static_cast<float>(get_height()):0;
 + if(!ok||w<=0||h<=0||right-left<12||top-bottom<12||left<0||right>w||bottom<0||top>h)return false;
 + rect={left/w,(h-top)/h,(right-left)/w,(top-bottom)/h};return true;
++}
++bool DockBounds(Il2CppObject* item,DockRect& rect) {
++ for(int depth=0;item&&depth<4;depth++) {
++  if(ExactDockBounds(item,rect)&&rect.width<.2f&&rect.height<.3f)return true;
++  item=Reference(Reference(item,"transform"),"parent");
++ }
++ return false;
 +}
 +float UiScale() {
 + auto helper=il2cpp_get_class_helper("Assembly-CSharp","Digit.Client.UI","ScreenManager");
@@ -811,7 +826,7 @@ index 8102a74..1c5d34a 100644
  #include "patches/mapkey.h"
  #include "prime/KeyCode.h"
 @@ -253,6 +256,7 @@ float Config::GetDPI()
-
+ 
  void Config::AdjustUiScale(bool scaleUp)
  {
 +  if(this->ui_scale == 0.0f)this->ui_scale=single_settings::NativeUiScale();
@@ -819,7 +834,7 @@ index 8102a74..1c5d34a 100644
      auto old_scale    = this->ui_scale;
      auto scale_factor = (scaleUp ? 1.0f : -1.0f) * this->ui_scale_step;
 @@ -267,6 +271,7 @@ void Config::AdjustUiScale(bool scaleUp)
-
+ 
  void Config::AdjustUiViewerScale(bool scaleUp)
  {
 +  if(this->ui_scale_viewer == 0.0f)this->ui_scale_viewer=1.0f;
@@ -855,7 +870,7 @@ index 8102a74..1c5d34a 100644
    this->disable_preview_recall =
 @@ -1436,10 +1454,14 @@ void Config::Load()
    parse_config_shortcut(config, parsed, "focus_search", GameFunction::FocusSearch, DCSH::focus_search);
-
+ 
    parse_config_shortcut(config, parsed, "action_primary", GameFunction::ActionPrimary, DCSH::action_primary);
 +  parse_config_shortcut(config, parsed, "action_select_attack_hostile", GameFunction::ActionSelectAttackHostile,
 +                        DCSH::action_select_attack_hostile);
@@ -1133,7 +1148,7 @@ index 5849871..5405896 100644
 -  constexpr bool        loader_tip_enabled = true; // show custom tip on loading screen
 +  constexpr bool        loader_tip_enabled = false; // retain native STFC tips
  } // namespace Graphics
-
+ 
  namespace Patches
 @@ -125,6 +125,9 @@ namespace Shortcuts
    constexpr const char* action_queue         = "SPACE|MOUSE1";
@@ -1146,7 +1161,7 @@ index 5849871..5405896 100644
    constexpr const char* action_recall_cancel = "SPACE|MOUSE1";
    constexpr const char* action_repair        = "R|MOUSE3";
 @@ -262,6 +265,8 @@ namespace Sync
-
+ 
  namespace UI
  {
 +  constexpr bool community_panel_enabled = true;
@@ -1926,29 +1941,6 @@ index 0000000..5ec3d55
 +         std::clamp(far_source?(minimum-ratio)/span:(ratio-maximum)/span,0.0f,1.0f)};
 +}
 +}
-diff --git a/mods/src/manual_hold_policy.h b/mods/src/manual_hold_policy.h
-new file mode 100644
-index 0000000..27f5fcb
---- /dev/null
-+++ b/mods/src/manual_hold_policy.h
-@@ -0,0 +1,17 @@
-+#pragma once
-+#include <cstdint>
-+namespace manual_hold {
-+struct Decision {bool request=false,cancel=false;};
-+struct Gate {
-+ bool armed=false,repeating=false;std::int64_t began=0,last=0;
-+ Decision Tick(bool pressed,bool held,bool eligible,bool ready,std::int64_t now){
-+  if(!eligible){bool cancel=armed||repeating;*this={};return {false,cancel};}
-+  if(pressed){armed=held;repeating=false;began=last=now;return {true,false};}
-+  if(!held){bool cancel=repeating;*this={};return {false,cancel};}
-+  if(!armed)return {};
-+  if(now-began>=400)repeating=true;
-+  if(repeating&&ready&&now-last>=500){last=now;return {true,false};}
-+  return {};
-+ }
-+};
-+}
 diff --git a/mods/src/patches/gamefunctions.h b/mods/src/patches/gamefunctions.h
 index 7c2c8ba..0a4a07b 100644
 --- a/mods/src/patches/gamefunctions.h
@@ -1976,15 +1968,15 @@ index 174e9da..5da0402 100644
  #include "config.h"
 +#include "single_settings_save.h"
  #include "errormsg.h"
-
+ 
  #include <il2cpp/il2cpp_helper.h>
 @@ -41,6 +42,7 @@ bool KeyboardPanAllowed()
-
+ 
  bool NavigationPan_LateUpdate_Hook(auto original, NavigationPan* _this)
  {
 +  if(single_settings::NativePan())return original(_this);
    auto d = _this->_lastDelta;
-
+ 
    static auto GetMouseButton = il2cpp_resolve_icall_typed<bool(int)>("UnityEngine.Input::GetMouseButton(System.Int32)");
 diff --git a/mods/src/patches/parts/haven_zoom.cc b/mods/src/patches/parts/haven_zoom.cc
 index f267e48..0129de5 100644
@@ -1996,15 +1988,15 @@ index f267e48..0129de5 100644
 +#include "errormsg.h"
 +#include <prime/Hub.h>
 +#include <unordered_map>
-
+ 
  #include <il2cpp/il2cpp_helper.h>
  #include <il2cpp/method_contract.h>
 @@ -13,6 +17,7 @@
  #include <utility>
-
+ 
  void ApplyHavenRoadDepthBias();
 +void ApplyInteriorZoomFrame(Il2CppObject*);
-
+ 
  namespace
  {
 @@ -59,8 +64,9 @@ void HavenCamera_UpdateCameraFrame_Hook(auto original, Il2CppObject *provider, C
@@ -2016,7 +2008,7 @@ index f267e48..0129de5 100644
 -  if (provider == nullptr || !std::isfinite(max_zoom) || max_zoom <= 0.0f)
 +  if (provider == nullptr)
      return;
-
+ 
    Il2CppObject *source = nullptr, *target = nullptr;
 @@ -68,7 +74,7 @@ void HavenCamera_UpdateCameraFrame_Hook(auto original, Il2CppObject *provider, C
    il2cpp_field_get_value(provider, blend_target, &target);
@@ -2025,12 +2017,12 @@ index f267e48..0129de5 100644
 -      || source_radius == target_radius || max_zoom <= std::max(source_radius, target_radius))
 +      || source_radius == target_radius)
      return;
-
+ 
    Il2CppObject *pivot = nullptr, *target_pivot = nullptr, *source_look_target = nullptr, *target_look_target = nullptr;
 @@ -114,6 +120,23 @@ void HavenCamera_UpdateCameraFrame_Hook(auto original, Il2CppObject *provider, C
        || std::abs(af - bf) > 0.001f || source_orthographic || target_orthographic || result_orthographic)
      return;
-
+ 
 +  // Qualified common-pivot planetary blend only; do not capture unrelated UI cameras.
 +  if(auto* sections=Hub::get_SectionManager()) {
 +    const int section=static_cast<int>(sections->CurrentSection);
@@ -2052,7 +2044,7 @@ index f267e48..0129de5 100644
        reinterpret_cast<float (*)(Il2CppObject *, float, const MethodInfo *)>(curve_evaluate->methodPointer);
    const auto at_ratio   = evaluate(curve, ratio, curve_evaluate);
 @@ -165,6 +188,9 @@ void HavenCamera_UpdateCameraFrame_Hook(auto original, Il2CppObject *provider, C
-
+ 
  void InstallHavenZoomHooks()
  {
 +  static bool attempted=false;
@@ -2063,14 +2055,13 @@ index f267e48..0129de5 100644
    auto orbit =
 diff --git a/mods/src/patches/parts/hostile_action.cc b/mods/src/patches/parts/hostile_action.cc
 new file mode 100644
-index 0000000..88f8c99
+index 0000000..684fac6
 --- /dev/null
 +++ b/mods/src/patches/parts/hostile_action.cc
-@@ -0,0 +1,306 @@
+@@ -0,0 +1,289 @@
 +#include "patches/parts/hostile_action.h"
 +#include "patches/parts/hostile_target_audit.h"
 +#include "errormsg.h"
-+#include "manual_hold_policy.h"
 +
 +
 +#include "prime/FleetBarViewController.h"
@@ -2357,28 +2348,12 @@ index 0000000..88f8c99
 +    release(StatusName(probe.status));
 +  }
 +}
-+
-+namespace {manual_hold::Gate held_gate;uint64_t held_ship=0;}
-+void ResetHeldSelectAttackHostile(){held_gate={};held_ship=0;CancelSelectAttackHostile("held input interrupted");}
-+void UpdateHeldSelectAttackHostile(FleetBarViewController* bar,bool pressed,bool held,bool eligible){
-+ auto* own=SelectedFleet(bar);eligible=eligible&&InSystem()&&own&&own->Id;
-+ if(pressed&&own)held_ship=own->Id;
-+ if(held_ship&&own&&held_ship!=own->Id){ResetHeldSelectAttackHostile();pressed=false;}
-+ const auto pending=own?pursuits.find(own->Id):pursuits.end();
-+ const bool awaiting=pending!=pursuits.end()&&pending->second.awaiting_attack;
-+ std::string reason;const bool ready=eligible&&own->CurrentState==FleetState::IdleInSpace&&!awaiting&&!hostile_audit::TacticalBusy(own,reason);
-+ const auto decision=held_gate.Tick(pressed,held,eligible,ready,NowMs());
-+ if(decision.cancel)CancelSelectAttackHostile("held input released or unavailable");
-+ if(!held&&!pressed)held_ship=0;
-+ if(eligible)UpdateSelectAttackHostile(bar,decision.request);
-+ else CancelSelectAttackHostile("manual input unavailable");
-+}
 diff --git a/mods/src/patches/parts/hostile_action.h b/mods/src/patches/parts/hostile_action.h
 new file mode 100644
-index 0000000..b164f31
+index 0000000..95b040b
 --- /dev/null
 +++ b/mods/src/patches/parts/hostile_action.h
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,18 @@
 +#pragma once
 +
 +#include <cstdint>
@@ -2397,9 +2372,6 @@ index 0000000..b164f31
 +bool                 VisibleHostileKnownDestroyed(int64_t fleet_id);
 +void                 UpdateSelectAttackHostile(FleetBarViewController* fleet_bar, bool pressed);
 +void                 CancelSelectAttackHostile(const char* reason = "interrupted");
-+
-+void UpdateHeldSelectAttackHostile(FleetBarViewController* bar,bool pressed,bool held,bool eligible);
-+void ResetHeldSelectAttackHostile();
 diff --git a/mods/src/patches/parts/hostile_target_audit.cc b/mods/src/patches/parts/hostile_target_audit.cc
 new file mode 100644
 index 0000000..7243166
@@ -3452,7 +3424,7 @@ index 0000000..7186a1b
 +};
 +} // namespace hostile_audit
 diff --git a/mods/src/patches/parts/hotkeys.cc b/mods/src/patches/parts/hotkeys.cc
-index 8592d89..5c0986b 100644
+index 8592d89..bf3e5e3 100644
 --- a/mods/src/patches/parts/hotkeys.cc
 +++ b/mods/src/patches/parts/hotkeys.cc
 @@ -1,5 +1,14 @@
@@ -3467,7 +3439,7 @@ index 8592d89..5c0986b 100644
 +#include <fstream>
 +#include <sstream>
 +#include <string>
-
+ 
  #include <spud/detour.h>
  #include <il2cpp/method_contract.h>
 @@ -48,6 +57,8 @@
@@ -3477,7 +3449,7 @@ index 8592d89..5c0986b 100644
 +#include "patches/parts/hostile_action.h"
 +#include "patches/parts/hostile_target_audit.h"
  #include "str_utils.h"
-
+ 
  #include <il2cpp-tabledefs.h>
 @@ -77,6 +88,218 @@ static int  show_officer_presets_pending       = 0;
  static int  show_officer_swap_pending          = 0;
@@ -3695,11 +3667,11 @@ index 8592d89..5c0986b 100644
 +
 +  return false;
 +}
-
+ 
  using GetShowKeybindingsFn     = bool(void*);
  using SetShowKeybindingsFn     = void(void*, bool);
 @@ -707,7 +930,10 @@ bool PressOfficerPresetsButton()
-
+ 
  void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
  {
 +  community_panel::Pump();
@@ -3711,50 +3683,50 @@ index 8592d89..5c0986b 100644
    }
 @@ -721,6 +947,13 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
    static int32_t                                            last_ship_select_request = -1;
-
+ 
    Key::ResetCache();
 +  bool manual_input_ready=!Key::IsInputFocused()&&!Hub::IsInChat()&&community_panel::ManualInputReady();
 +#if _WIN32
 +  DWORD input_pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&input_pid);
 +  manual_input_ready=manual_input_ready&&input_pid==GetCurrentProcessId();
 +#endif
-+  if(!manual_input_ready)ResetHeldSelectAttackHostile();
++  if(!manual_input_ready)CancelSelectAttackHostile("manual input interrupted");
 +
-
+ 
    if (MapKey::IsDown(GameFunction::DisableHotKeys)) {
      if (shortcut_hints_ready) {
 @@ -780,10 +1013,12 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
    }
-
+ 
    if (Config::Get().use_scopely_hotkeys && Config::Get().hotkeys_enabled) {
-+    ResetHeldSelectAttackHostile();
++    CancelSelectAttackHostile("manual input interrupted");
      return original(_this);
    }
-
+ 
    if (!Config::Get().hotkeys_enabled) {
-+    ResetHeldSelectAttackHostile();
++    CancelSelectAttackHostile("manual input interrupted");
      return;
    }
-
+ 
 @@ -797,7 +1032,7 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
    const auto is_in_chat = Hub::IsInChat();
    const auto config     = &Config::Get();
-
+ 
 -  if (MapKey::IsDown(GameFunction::Restart)) {
 +  if (MapKey::IsDown(GameFunction::Restart) && !Config::Get().community_panel_enabled) {
      spdlog::info("Clearing localisation cache and restarting");
      LanguageManager::ClearCache();
      Hub::get_App()->Reload();
-@@ -1172,7 +1407,26 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+@@ -1172,7 +1407,27 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
      }
    }
-
+ 
 +  if (Key::IsInputFocused()) {
 +    CancelSelectAttackHostile("text input focused");
 +  }
    if (!Key::IsInputFocused()) {
 +    if(MapKey::IsDown(GameFunction::ActionRecallAll)) {
-+      ResetHeldSelectAttackHostile();
++      CancelSelectAttackHostile("manual input interrupted");
 +      fleet_diagnostics::RecallAll();
 +      return;
 +    }
@@ -3764,18 +3736,19 @@ index 8592d89..5c0986b 100644
 +    const bool unrelated_action = Key::Pressed(KeyCode::Escape) || MapKey::IsDown(GameFunction::ActionPrimary)
 +                                  || MapKey::IsDown(GameFunction::ActionRecall);
 +    if (unrelated_action) {
-+      ResetHeldSelectAttackHostile();
++      CancelSelectAttackHostile("manual input interrupted");
 +    } else {
-+      UpdateHeldSelectAttackHostile(ObjectFinder<FleetBarViewController>::Get(), hostile_pressed,MapKey::IsPressed(GameFunction::ActionSelectAttackHostile),manual_input_ready);
++      if(manual_input_ready)UpdateSelectAttackHostile(ObjectFinder<FleetBarViewController>::Get(),hostile_pressed);
++      else CancelSelectAttackHostile("manual input unavailable");
 +    }
 +
      // Lets try to remove the pre-scan because we hit escape and it's visible
      if (Key::Pressed(KeyCode::Escape)) {
        if (config->primary_requires_visible_target) {
-@@ -1210,7 +1464,20 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
-
+@@ -1210,7 +1465,20 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+ 
      DailyFactionBulkClaimUpdate();
-
+ 
 -    if (MapKey::IsDown(GameFunction::ActionView)) {
 +    // Diagnostic variant intentionally starts on the native mining-node card.
 +    // The tracer is change-driven: it records viewer/context changes even if a
@@ -3792,10 +3765,10 @@ index 8592d89..5c0986b 100644
 +
 +    if (run17_action_view && !run17_handled_view) {
        auto all_pre_scan_widgets = ObjectFinder<PreScanTargetWidget>::GetAll();
-
+ 
        for (auto& pre_scan_widget : all_pre_scan_widgets) {
-@@ -1830,6 +2097,17 @@ void InstallShortcutHintHooks()
-
+@@ -1830,6 +2098,17 @@ void InstallShortcutHintHooks()
+ 
  void InstallHotkeyHooks()
  {
 +  {
@@ -3812,9 +3785,9 @@ index 8592d89..5c0986b 100644
    auto shortcuts_manager_helper =
        il2cpp_get_class_helper("Assembly-CSharp", "Digit.Prime.GameInput", "ShortcutsManager");
    if (!shortcuts_manager_helper.isValidHelper()) {
-@@ -1872,6 +2150,7 @@ void InstallHotkeyHooks()
+@@ -1872,6 +2151,7 @@ void InstallHotkeyHooks()
    InstallShortcutHintHooks();
-
+ 
    install_screen_manager_update_hook();
 +  hostile_audit::Install();
  #ifdef _MODDBG
@@ -3844,7 +3817,7 @@ index f782bf5..641b09d 100644
  #include <cmath>
 -#include <cstring>
  #include <unordered_map>
-
+ 
 -// Station-interior zoom-out.
 -//
 -// The interior view is a BlendFrameProvider between a StaticFrameProvider (zoomed-in) and an
@@ -4100,7 +4073,7 @@ index 8eeee11..8603c3b 100644
  #include "config.h"
 +#include "community_panel.h"
  #include "errormsg.h"
-
+ 
  #include <il2cpp/il2cpp_helper.h>
 @@ -138,12 +139,14 @@ void ApplyConfiguredButtonVisibility(void* controller)
  void MissionsHudViewController_OnEnable_Hook(auto original, void* controller)
@@ -4109,14 +4082,14 @@ index 8eeee11..8603c3b 100644
 +  community_panel::ObserveHud(controller);
    ApplyConfiguredButtonVisibility(controller);
  }
-
+ 
  void MissionsHudViewController_SetupAchievementsButton_Hook(auto original, void* controller)
  {
    original(controller);
 +  community_panel::ObserveHud(controller);
    ApplyConfiguredButtonVisibility(controller);
  }
-
+ 
 @@ -164,6 +167,7 @@ void MissionsHudViewController_HandleOutpostsAndChallengesHUD_Hook(auto original
    // In planetary view this method hides challenges directly, bypassing its setup
    // method. Reapply after the whole operation, including the planetary branch.
@@ -4124,7 +4097,7 @@ index 8eeee11..8603c3b 100644
 +  community_panel::ObserveHud(controller);
    ApplyConfiguredButtonVisibility(controller);
  }
-
+ 
 diff --git a/mods/src/patches/parts/object_tracker.cc b/mods/src/patches/parts/object_tracker.cc
 index e6a30fc..f69ec77 100644
 --- a/mods/src/patches/parts/object_tracker.cc
@@ -4148,7 +4121,7 @@ index e6a30fc..f69ec77 100644
      SPUD_STATIC_DETOUR(ctor, track_ctor);
      seen_ctor.emplace(ctor);
    }
-
+ 
 -  if (seen_destroy.find(on_destroy) == seen_destroy.end()) {
 +  if (on_destroy && seen_destroy.find(on_destroy) == seen_destroy.end()) {
      SPUD_STATIC_DETOUR(on_destroy, track_destroy);
@@ -4157,14 +4130,14 @@ index e6a30fc..f69ec77 100644
 @@ -263,7 +271,11 @@ void InstallObjectTrackers()
    TrackObject<ShipManagementScreenStateViewController>();
    TrackObject<StarNodeObjectViewerWidget>();
-
+ 
 -  SPUD_STATIC_DETOUR(il2cpp_unity_liveness_finalize, calc_liveness_hook);
 +  if (il2cpp_unity_liveness_finalize) {
 +    SPUD_STATIC_DETOUR(il2cpp_unity_liveness_finalize, calc_liveness_hook);
 +  } else {
 +    spdlog::error("Collective object tracker: liveness finalizer unavailable; cleanup hook skipped");
 +  }
-
+ 
  #if defined(__APPLE__) && defined(SPUD_ARCH_ARM64)
    spdlog::warn("Object tracker: macOS ARM64 SPUD indirect-branch fix active; liveness-finalize hook enabled");
 diff --git a/mods/src/patches/parts/transition_screen.cc b/mods/src/patches/parts/transition_screen.cc
@@ -4172,22 +4145,22 @@ index b883a6c..d1e530b 100644
 --- a/mods/src/patches/parts/transition_screen.cc
 +++ b/mods/src/patches/parts/transition_screen.cc
 @@ -1,5 +1,6 @@
-
+ 
  #include "loading_screen_common.h"
 +#include "community_panel.h"
-
+ 
  #include <spud/detour.h>
-
+ 
 @@ -259,6 +260,7 @@ static void TVC_Awake_Hook(auto original, void* _this)
-
+ 
  static void TVC_AboutToShow_Hook(auto original, void* _this)
  {
 +  community_panel::ObserveTransition(_this, true);
    original(_this);
-
+ 
    try {
 @@ -269,6 +271,7 @@ static void TVC_AboutToShow_Hook(auto original, void* _this)
-
+ 
  static void TVC_AboutToHide_Hook(auto original, void* _this)
  {
 +  community_panel::ObserveTransition(_this, false);
@@ -4202,13 +4175,13 @@ index 7b23d87..e143bf8 100644
  #include "errormsg.h"
  #include <config.h>
 +#include "single_settings_save.h"
-
+ 
  #include <il2cpp/il2cpp_helper.h>
-
+ 
 @@ -91,6 +92,8 @@ void ScreenManager_UpdateCanvasRootScaleFactor_Hook(auto original, ScreenManager
    }
    #endif
-
+ 
 +  if(Config::Get().ui_scale==0.0f && _this && _this->m_canvasRootScaler)
 +    single_settings::ObserveNativeUiScale(_this->m_canvasRootScaler->scaleFactor / Config::GetDPI());
    if (Config::Get().ui_scale != 0.0f) {
@@ -4227,21 +4200,21 @@ index 2fb7af7..7dbeff6 100644
 +#include "errormsg.h"
 +#include "patches/parts/hostile_action.h"
 +#include "patches/parts/hostile_target_audit.h"
-
+ 
  #include <patches/mapkey.h>
-
+ 
 @@ -18,6 +24,7 @@
-
+ 
  #include <cstdint>
  #include <unordered_map>
 +#include <vector>
-
+ 
  namespace
  {
 @@ -197,6 +204,106 @@ void UpdateFleetLabelThreshold()
  }
  } // namespace
-
+ 
 +bool TryVisibleFleetPosition(int64_t fleet_id, float& x, float& y, float& z)
 +{
 +  static auto component_helper =
@@ -4347,22 +4320,22 @@ index 2fb7af7..7dbeff6 100644
    static auto class_helper = il2cpp_get_class_helper("Digit.Client.PrimeLib.Runtime", "Digit.Client.Core", "MathUtils");
 @@ -218,6 +325,8 @@ vec3 GetMouseWorldPos(void *cam, vec3 *pos)
  }
-
+ 
  auto do_default_zoom = false;
 +bool saved_system_zoom_pending=false;
 +std::unordered_map<NavigationZoom*,NodeDepth> saved_navigation_pending;
-
+ 
  inline void StoreZoom(std::string label, float &zoom, NavigationZoom *_this)
  {
 @@ -252,8 +361,7 @@ static void SetSceneCameraFarClip(NavigationZoom *_this)
    }
-
+ 
    cam->farClipPlane    = Config::Get().zoom * 3.75f;
 -  cam->clearFlags      = 2;
 -  cam->backgroundColor = {0, 0, 0, 0};
 +  // Preserve the game's background and camera clear flags.
  }
-
+ 
  static void EnsureSystemZoomRange(NavigationZoom *_this)
 @@ -354,6 +462,7 @@ void NavigationZoom_Update_Hook(auto original, NavigationZoom *_this)
        } else if (MapKey::IsDown(GameFunction::SetZoomPreset5)) {
@@ -4371,11 +4344,11 @@ index 2fb7af7..7dbeff6 100644
 +        single_settings::ClearSystemZoomOverride();
          return StoreZoom("System Default", config->default_system_zoom, _this);
        }
-
+ 
 @@ -387,7 +496,7 @@ void NavigationZoom_Update_Hook(auto original, NavigationZoom *_this)
        }
      }
-
+ 
 -    if (do_default_zoom) {
 +    if (do_default_zoom && config->default_system_zoom >= 0) {
        do_absolute_zoom = true;
@@ -4383,17 +4356,17 @@ index 2fb7af7..7dbeff6 100644
      }
 @@ -424,14 +533,48 @@ void NavigationZoom_Update_Hook(auto original, NavigationZoom *_this)
    }
-
+ 
    if (zoomDelta > 0.0f && config->use_presets_as_default && do_store_zoom) {
 +    single_settings::ClearSystemZoomOverride();
      StoreZoom("System Preset Default from Preset", config->default_system_zoom, _this);
    }
-
+ 
 +  if(do_default_zoom)saved_system_zoom_pending=std::isfinite(single_settings::SavedSystemZoomDistance());
    do_default_zoom = false;
-
+ 
    original(_this);
-
+ 
    EnsureSystemZoomRange(_this);
 +  auto* save_sections=Hub::get_SectionManager();
 +  if(save_sections) {
@@ -4431,7 +4404,7 @@ index 2fb7af7..7dbeff6 100644
      BeginFleetLabelSystemState(_this);
      const auto state_was_valid   = system_zoom_state_valid;
 @@ -581,6 +724,7 @@ void PlanetViewUtils_Populate_Hook(auto original, PlanetViewUtils *_this, Il2Cpp
-
+ 
  void NavigationZoom_SetViewParameters_Hook(auto original, NavigationZoom *_this, float radius, NodeDepth depth)
  {
 +  if(depth!=NodeDepth::SolarSystem)saved_navigation_pending[_this]=depth;
@@ -4440,7 +4413,7 @@ index 2fb7af7..7dbeff6 100644
        ResetFleetLabelSystemState();
 @@ -590,6 +734,10 @@ void NavigationZoom_SetViewParameters_Hook(auto original, NavigationZoom *_this,
    }
-
+ 
    if (depth == NodeDepth::SolarSystem) {
 +    if(single_settings::NativeStart()) {
 +      original(_this,radius,depth);
@@ -4448,9 +4421,9 @@ index 2fb7af7..7dbeff6 100644
 +    }
      ApplySystemZoomRange(_this, radius);
      SetSceneCameraFarClip(_this);
-
+ 
 @@ -604,6 +752,7 @@ void NavigationZoom_SetViewParameters_Hook(auto original, NavigationZoom *_this,
-
+ 
  void NavigationZoom_SetDepth_Hook(auto original, NavigationZoom *_this, NodeDepth depth)
  {
 +  if(depth!=NodeDepth::SolarSystem)saved_navigation_pending[_this]=depth;
@@ -4459,7 +4432,7 @@ index 2fb7af7..7dbeff6 100644
        ResetFleetLabelSystemState();
 @@ -613,6 +762,10 @@ void NavigationZoom_SetDepth_Hook(auto original, NavigationZoom *_this, NodeDept
    }
-
+ 
    if (depth == NodeDepth::SolarSystem) {
 +    if(single_settings::NativeStart()) {
 +      original(_this,depth);
@@ -4467,7 +4440,7 @@ index 2fb7af7..7dbeff6 100644
 +    }
      ApplySystemZoomRange(_this, _this->_viewRadius);
      SetSceneCameraFarClip(_this);
-
+ 
 @@ -647,7 +800,7 @@ void InstallZoomHooks()
    auto *normalized_zoom_property = navigation_zoom_class != nullptr
                                         ? il2cpp_class_get_property_from_name(navigation_zoom_class, "NormalizedZoom")
@@ -4488,11 +4461,11 @@ index 7a30836..364598e 100644
  #include "log_history.h"
  #include "version.h"
 +#include "collective_diagnostics.h"
-
+ 
  #include <il2cpp/il2cpp-functions.h>
-
+ 
 @@ -96,6 +98,7 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
-
+ 
    spdlog::set_level(log_level);
    spdlog::flush_on(log_level);
 +  CollectiveDiagnostics::Initialize(File::Log(), File::Config());
@@ -4502,30 +4475,30 @@ index 7a30836..364598e 100644
 @@ -136,7 +139,10 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
    spdlog::info("Loading Configuration...");
    spdlog::info("");
-
+ 
 +  CollectiveDiagnostics::Event("config_load_begin", "");
    static auto& cfg = Config::Get();
 +  CollectiveDiagnostics::Event("config_load_returned", "");
 +  community_panel::Start();
-
+ 
    spdlog::info("");
    spdlog::info("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=");
 @@ -187,7 +193,11 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
    };
    printf("il2cpp_init_hook(%s)\n", domain_name);
-
+ 
 +  // Record native progress only. Managed Unity getters can depend on startup
 +  // phases that have not completed when il2cpp_init returns.
 +  CollectiveDiagnostics::Event("il2cpp_init_begin", "");
    auto r = original(domain_name);
 +  CollectiveDiagnostics::Event("il2cpp_init_returned", "");
-
+ 
    auto patch_count = 0;
    auto patch_total = sizeof(patches) / sizeof(patches[0]);
 @@ -199,10 +209,25 @@ __int64 il2cpp_init_hook(auto original, const char* domain_name)
      const auto patch_mode                  = patch_install ? "+ Patch" : "x Skipp";
      spdlog::info(" {}ing {:>2} of {} ({})", patch_mode, patch_count, patch_total, patch.name);
-
+ 
 +    CollectiveDiagnostics::BeginPatch(patch.name, patch_install);
      if (patch_install) {
 -      patch_func();
@@ -4546,15 +4519,15 @@ index 7a30836..364598e 100644
 +    CollectiveDiagnostics::EndPatch();
    }
 +  CollectiveDiagnostics::Summarize(static_cast<unsigned>(patch_total));
-
+ 
    spdlog::info("");
-
+ 
 diff --git a/mods/src/prime/FleetDeployedData.h b/mods/src/prime/FleetDeployedData.h
 index fc3bc60..32d70fd 100644
 --- a/mods/src/prime/FleetDeployedData.h
 +++ b/mods/src/prime/FleetDeployedData.h
 @@ -2,6 +2,11 @@
-
+ 
  #include <il2cpp/il2cpp_helper.h>
  #include "HullSpec.h"
 +#include <cstdint>
@@ -4562,12 +4535,12 @@ index fc3bc60..32d70fd 100644
 +#include <cmath>
 +#include <il2cpp-tabledefs.h>
 +#include "Vector3.h"
-
+ 
  enum class DeployedFleetType {
    Nonexistent,
 @@ -28,6 +33,45 @@ private:
    }
-
+ 
  public:
 +  // The runtime inventory identifies SystemPosition and its Unity Vector3
 +  // backing field. Validate the accessor and value layout before invoking it.
@@ -4617,7 +4590,7 @@ index c6b1047..2daea73 100644
 +++ b/mods/src/prime/NavigationManager.h
 @@ -1,7 +1,22 @@
  #pragma once
-
+ 
 +#include <cstdint>
 +#include <il2cpp/il2cpp_helper.h>
 +
@@ -5897,22 +5870,22 @@ index 1f6c6bf..2c0e612 100644
 @@ -16,12 +16,12 @@
  	#define VERSION_PATCH_STR ""
  #endif
-
+ 
 -#define VER_FILE_DESCRIPTION_STR    "Star Trek Fleet Command: Community Mod" VERSION_PATCH_STR
 +#define VER_FILE_DESCRIPTION_STR    "Morbid Kitty Labs: Run17 R18 Single Account"
-
+ 
  #define VER_FILE_VERSION            VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION, VERSION_PATCH
  #define VER_FILE_VERSION_STR        STRINGIFY(VERSION_MAJOR) "." STRINGIFY(VERSION_MINOR) "." STRINGIFY(VERSION_REVISION) "." STRINGIFY(VERSION_PATCH)
-
+ 
 -#define STFC_DISTRIBUTION_ID        "netniv.stfc-community-mod"
 +#define STFC_DISTRIBUTION_ID        "morbidkitty.run17-r18"
-
+ 
  #ifndef STFC_SOURCE_STATE_ID
  #define STFC_SOURCE_STATE_ID        "unknown"
 @@ -50,7 +50,7 @@
                                      ";mode=" STFC_BUILD_MODE \
                                      ";channel=" STFC_BUILD_CHANNEL
-
+ 
 -#define VER_PRODUCTNAME_STR         "STFC: Community Mod"
 +#define VER_PRODUCTNAME_STR         "Morbid Kitty Labs: Run17 R18"
  #define VER_PRODUCT_VERSION         VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION
@@ -5947,21 +5920,21 @@ index f4c0e07..2d2ee80 100644
 +++ b/win-proxy-dll/src/main.cc
 @@ -3,6 +3,7 @@
  #include <filesystem>
-
+ 
  #include "patches/patches.h"
 +#include "loader_policy.h"
-
+ 
  void VersionDllInit();
-
+ 
 @@ -19,7 +20,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID /*lpReserved*/)
-
+ 
        game_path = szFileName;
-
+ 
 -      if (!game_path.filename().generic_wstring().starts_with(L"prime")) {
 +      if (!LoaderPolicy::IsPrimeExecutableName(game_path.filename().generic_wstring())) {
          return TRUE;
        }
-
+ 
 diff --git a/win-proxy-dll/xmake.lua b/win-proxy-dll/xmake.lua
 index f41d62e..12bbebb 100644
 --- a/win-proxy-dll/xmake.lua

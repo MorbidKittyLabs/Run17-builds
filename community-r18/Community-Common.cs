@@ -10,6 +10,13 @@ using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
+// Use one physical-pixel coordinate space for Unity anchors and Win32 windows.
+public static class DesktopDpi {
+ [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+ [DllImport("shcore.dll")] static extern int SetProcessDpiAwareness(int awareness);
+ [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+ public static void Initialize(){try{if(SetProcessDpiAwarenessContext(new IntPtr(-4)))return;}catch(EntryPointNotFoundException){}try{if(SetProcessDpiAwareness(2)==0)return;}catch(DllNotFoundException){}catch(EntryPointNotFoundException){}SetProcessDPIAware();}
+}
 public static class BeveledFace {
  public static GraphicsPath Shape(Rectangle bounds,int radius){return Shape(bounds,radius,true,true);}
  public static GraphicsPath Shape(Rectangle bounds,int radius,bool roundLeft,bool roundRight){var p=new GraphicsPath();int d=Math.Min(radius*2,Math.Min(bounds.Width,bounds.Height));if(d<=0)return p;if(roundLeft)p.AddArc(bounds.Left,bounds.Top,d,d,180,90);else p.AddLine(bounds.Left,bounds.Top,bounds.Left,bounds.Top);if(roundRight){p.AddArc(bounds.Right-d,bounds.Top,d,d,270,90);p.AddArc(bounds.Right-d,bounds.Bottom-d,d,d,0,90);}else p.AddLine(bounds.Right,bounds.Top,bounds.Right,bounds.Bottom);if(roundLeft)p.AddArc(bounds.Left,bounds.Bottom-d,d,d,90,90);else p.AddLine(bounds.Left,bounds.Bottom,bounds.Left,bounds.Top);p.CloseFigure();return p;}
@@ -26,9 +33,10 @@ public class GameButton:Button {
  protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,Enabled?ForeColor:Color.Silver,Enabled?TopColor:Color.FromArgb(67,90,105),Enabled?BottomColor:Color.FromArgb(35,51,62),joinLeft,joinRight);}
 }
 public sealed class GameClock:Label {
+ public Color TopColor=Color.FromArgb(20,130,185),BottomColor=Color.FromArgb(5,69,112);
  public GameClock(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}
  protected override void OnResize(EventArgs e){base.OnResize(e);if(Width>1&&Height>1)using(var path=BeveledFace.Shape(ClientRectangle,5)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
- protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,ForeColor,Color.FromArgb(26,155,211),Color.FromArgb(7,82,127));}
+ protected override void OnPaint(PaintEventArgs e){BeveledFace.Paint(e.Graphics,ClientRectangle,Text,Font,ForeColor,TopColor,BottomColor);}
 }
 public static class GamePaths {
  public static bool IsGame(string path){return !String.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path,"Prime.exe")) && File.Exists(Path.Combine(path,"GameAssembly.dll"));}

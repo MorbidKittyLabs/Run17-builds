@@ -130,12 +130,12 @@ public sealed class DockShortcut:Form {
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
  public void Place(Rectangle dock,float scale){
   int size=Math.Max(14,Math.Min((int)Math.Round(22*scale),Math.Min(dock.Width,dock.Height)/2));ClientSize=new Size(size,size);
-  Location=new Point(dock.Left+2,dock.Top+2);if(numberFont==null||numberFont.Size!=Math.Max(7,9*scale)){var old=numberFont;numberFont=new Font("Tahoma",Math.Max(7,9*scale),FontStyle.Bold);button.Font=numberFont;if(old!=null)old.Dispose();}
+  Location=new Point(dock.Left+2,Math.Max(dock.Top,dock.Bottom-size-(int)Math.Round(14*scale)));if(numberFont==null||numberFont.Size!=Math.Max(7,9*scale)){var old=numberFont;numberFont=new Font("Tahoma",Math.Max(7,9*scale),FontStyle.Bold);button.Font=numberFont;if(old!=null)old.Dispose();}
  }
  protected override void Dispose(bool disposing){base.Dispose(disposing);if(disposing&&numberFont!=null){numberFont.Dispose();numberFont=null;}}
 }
 
-public sealed class CommunityPanel:Form {
+public sealed class CommunityPanel:Form,IMessageFilter {
  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window,int command);
@@ -158,7 +158,9 @@ public sealed class CommunityPanel:Form {
  readonly SummonHandle summon=new SummonHandle();
  readonly DockShortcut[] dockShortcuts=new DockShortcut[8];
  readonly Dictionary<Control,Rectangle> controllerBounds=new Dictionary<Control,Rectangle>();
- float uiScale=1;
+ const float ControllerSize=2f/3f;
+ float uiScale=1;Font timerFont;
+ Rectangle placedGame;Size placedSize;bool placementDirty=true;
  EventWaitHandle wake;
  bool restoreHotkey,desktopHotkey;
   int pendingShip;uint lastShipSequence;DateTime shipDeadline;
@@ -193,9 +195,9 @@ public sealed class CommunityPanel:Form {
   clock=new GameClock{Bounds=new Rectangle(3,0,100,28),TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Tahoma",10,FontStyle.Bold),Cursor=Cursors.SizeAll};
   clock.Text=DateTime.Now.ToString("h:mm:ss tt");Controls.Add(clock);tips.SetToolTip(clock,"Clock • right-drag any control to move the menu");
   Make("Timers",3,30,74,28,"Six named reminders with days, hours, minutes and seconds",ShowTimers);
-  var hide=Make("X",79,30,24,28,"Hide controller — F8 or the green edge arrow restores it",HideMenu);hide.AccessibleName="Hide controller";hide.ForeColor=Color.White;hide.TopColor=Color.FromArgb(134,51,175);hide.BottomColor=Color.FromArgb(65,20,99);
+  var hide=Make("X",79,30,24,28,"Hide controller — F8 or the green edge arrow restores it",HideMenu);hide.AccessibleName="Hide controller";hide.ForeColor=Color.White;hide.TopColor=Color.FromArgb(205,55,67);hide.BottomColor=Color.FromArgb(119,24,36);
   Make("Diagnostics",3,60,74,28,"Collect diagnostic logs to a Desktop ZIP",CollectDiagnostics);
-  var exit=Make("X",79,60,24,28,"Close STFC, Store and controller",ShutdownGame);exit.AccessibleName="Close game and controller";exit.ForeColor=Color.White;exit.TopColor=Color.FromArgb(205,55,67);exit.BottomColor=Color.FromArgb(119,24,36);
+  var exit=Make("X",79,60,24,28,"Close STFC, Store and controller",ShutdownGame);exit.AccessibleName="Close game and controller";exit.ForeColor=Color.White;exit.TopColor=Color.FromArgb(134,51,175);exit.BottomColor=Color.FromArgb(65,20,99);
   Make("Store",3,90,74,28,"Open the separate STFC Store window",()=>store.Open(GameRectangle()));
   var closeStore=Make("X",79,90,24,28,"Close Store window only",()=>store.Close());closeStore.AccessibleName="Close Store only";closeStore.ForeColor=Color.White;closeStore.TopColor=Color.FromArgb(205,55,67);closeStore.BottomColor=Color.FromArgb(119,24,36);
   var mic=Make("\uE720",3,120,49,28,"Toggle chat and Windows voice typing together",VoiceTyping);mic.Font=new Font("Segoe MDL2 Assets",11);mic.AccessibleName="Toggle chat and Windows voice typing";microphone=mic;
@@ -216,16 +218,23 @@ public sealed class CommunityPanel:Form {
   ui.Interval=50;ui.Tick+=(s,e)=>UpdateUi();ui.Start();RefreshGames();
  }
  bool cleaned;
- protected override void Dispose(bool disposing){if(disposing&&!cleaned){cleaned=true;closing=true;ui.Stop();timerAudio.Dispose();if(gapHook!=IntPtr.Zero)UnhookWindowsHookEx(gapHook);foreach(var badge in dockShortcuts)if(badge!=null){badge.Close();badge.Dispose();}Persist();DisposeSave();DisposeVoice();desktop.Dispose();store.Close();foreach(var notice in timerNotices.Values.ToArray()){notice.Close();notice.Dispose();}timerNotices.Clear();summon.Close();summon.Dispose();if(restoreHotkey)UnregisterHotKey(Handle,814);if(desktopHotkey)UnregisterHotKey(Handle,815);if(wake!=null)wake.Dispose();tray.Dispose();tips.Dispose();ui.Dispose();if(intro!=null)intro.Close();if(timerWindow!=null)timerWindow.Close();if(hudView!=null)hudView.Dispose();if(hudMap!=null)hudMap.Dispose();}base.Dispose(disposing);}
+ protected override void Dispose(bool disposing){if(disposing&&!cleaned){cleaned=true;closing=true;ui.Stop();timerAudio.Dispose();if(gapHook!=IntPtr.Zero)UnhookWindowsHookEx(gapHook);if(filterInstalled)Application.RemoveMessageFilter(this);foreach(var badge in dockShortcuts)if(badge!=null){badge.Close();badge.Dispose();}Persist();DisposeSave();DisposeVoice();desktop.Dispose();store.Close();foreach(var notice in timerNotices.Values.ToArray()){notice.Close();notice.Dispose();}timerNotices.Clear();summon.Close();summon.Dispose();if(restoreHotkey)UnregisterHotKey(Handle,814);if(desktopHotkey)UnregisterHotKey(Handle,815);if(wake!=null)wake.Dispose();tray.Dispose();tips.Dispose();ui.Dispose();if(intro!=null)intro.Close();if(timerWindow!=null)timerWindow.Close();if(hudView!=null)hudView.Dispose();if(hudMap!=null)hudMap.Dispose();}base.Dispose(disposing);}
  void UpdateRestoreHotkey(){uint front;GetWindowThreadProcessId(GetForegroundWindow(),out front);bool wanted=bound!=null&&(front==bound.Id||front==Process.GetCurrentProcess().Id||(voiceSession&&WindowsVoice.Owns(front))||store.Owns(GetForegroundWindow()));if(wanted){if(!restoreHotkey)restoreHotkey=RegisterHotKey(Handle,814,0x4000,0x77);if(!desktopHotkey)desktopHotkey=RegisterHotKey(Handle,815,0x4000,0x78);}else{if(restoreHotkey){UnregisterHotKey(Handle,814);restoreHotkey=false;}if(desktopHotkey){UnregisterHotKey(Handle,815);desktopHotkey=false;}}}
  void ToggleDesktop(){state.Borderless=!state.Borderless;if(state.Borderless){if(bound!=null)desktop.Apply(bound.Window);}else desktop.Restore();dirty=true;}
  void LayoutController(float scale){
-  uiScale=scale;
+  uiScale=scale;placementDirty=true;
+  var priorTimerFont=timerFont;timerFont=new Font("Tahoma",9*scale);
+  if(timerWindow!=null)timerWindow.Font=timerFont;
+  foreach(var notice in timerNotices.Values)notice.Fit("Timer finished",600,scale,timerFont);
+  if(priorTimerFont!=null)priorTimerFont.Dispose();
+  scale*=ControllerSize;
+  SuspendLayout();
   foreach(var pair in controllerBounds){var r=pair.Value;pair.Key.Bounds=new Rectangle((int)Math.Round(r.X*scale),(int)Math.Round(r.Y*scale),Math.Max(1,(int)Math.Round(r.Width*scale)),Math.Max(1,(int)Math.Round(r.Height*scale)));}
   var oldFont=Font;Font=new Font("Tahoma",9*scale);if(oldFont!=SystemFonts.DefaultFont)oldFont.Dispose();
   var oldClock=clock.Font;clock.Font=new Font("Tahoma",10*scale,FontStyle.Bold);oldClock.Dispose();
   foreach(var button in new[]{microphone,save}){var old=button.Font;button.Font=new Font("Segoe MDL2 Assets",11*scale);old.Dispose();}
   ClientSize=new Size((int)Math.Round(106*scale),(int)Math.Round(150*scale));
+  ResumeLayout();
   using(var region=new Region()){
    region.MakeEmpty();
    foreach(Control c in Controls)if(c.Width>0&&c.Height>0)region.Union(c.Bounds);
@@ -238,32 +247,50 @@ public sealed class CommunityPanel:Form {
  [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
  [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook,int code,IntPtr message,IntPtr data);
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
- MouseHook gapCallback;IntPtr gapHook;bool gapDragging;
- void InstallGapDrag(){if(preview)return;gapCallback=GapDrag;gapHook=SetWindowsHookEx(14,gapCallback,GetModuleHandle(null),0);}
+ [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
+ [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h,uint flags);
+ [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+ MouseHook gapCallback;IntPtr gapHook;bool filterInstalled;
+ bool dragging;Point dragMouse,dragOrigin;
+ void BeginDrag(Point p){dragMouse=p;dragOrigin=Location;dragging=true;Capture=true;}
+ void EndDrag(){if(!dragging)return;dragging=false;Capture=false;SavePlacement();}
+ void InstallGapDrag(){Application.AddMessageFilter(this);filterInstalled=true;gapCallback=GapDrag;gapHook=SetWindowsHookEx(14,gapCallback,GetModuleHandle(null),0);}
  IntPtr GapDrag(int code,IntPtr message,IntPtr data){
-  if(code>=0){int msg=message.ToInt32();var p=((MouseData)Marshal.PtrToStructure(data,typeof(MouseData))).Point;
-   if(msg==0x0204&&Visible&&RectangleToScreen(ClientRectangle).Contains(p)){gapDragging=true;dragging=true;dragMouse=p;dragOrigin=Location;return new IntPtr(1);}
-   if(gapDragging&&msg==0x0200){Location=new Point(dragOrigin.X+p.X-dragMouse.X,dragOrigin.Y+p.Y-dragMouse.Y);return new IntPtr(1);}
-   if(gapDragging&&msg==0x0205){gapDragging=false;dragging=false;BeginInvoke(new Action(SavePlacement));return new IntPtr(1);}
+  if(code>=0&&message.ToInt32()==0x0204&&Visible&&!dragging){
+   var p=((MouseData)Marshal.PtrToStructure(data,typeof(MouseData))).Point;
+   if(RectangleToScreen(ClientRectangle).Contains(p)){
+    var owner=GetAncestor(WindowFromPoint(p),2);
+    if(owner==Handle||(bound!=null&&owner==bound.Window)){
+     // Existing child controls receive right-down through the normal message loop.
+     if(owner!=Handle){BeginDrag(p);return new IntPtr(1);}
+    }
+   }
   }
   return CallNextHookEx(gapHook,code,message,data);
  }
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
- bool dragging,dragArmed;Point dragMouse,dragOrigin;Control dragOwner;
- void AttachDrag(Control c){
-  c.MouseDown+=(o,e)=>{if(e.Button!=MouseButtons.Right)return;dragArmed=true;dragging=false;dragMouse=Cursor.Position;dragOrigin=Location;dragOwner=c;c.Capture=true;};
-  c.MouseMove+=(o,e)=>{if(!dragArmed)return;var delta=new Point(Cursor.Position.X-dragMouse.X,Cursor.Position.Y-dragMouse.Y);if(Math.Abs(delta.X)+Math.Abs(delta.Y)>=4)dragging=true;if(dragging)Location=new Point(dragOrigin.X+delta.X,dragOrigin.Y+delta.Y);};
-  c.MouseUp+=(o,e)=>{if(e.Button!=MouseButtons.Right||!dragArmed)return;dragArmed=false;c.Capture=false;bool moved=dragging;dragging=false;dragOwner=null;if(moved)SavePlacement();};
+ protected override void OnMouseCaptureChanged(EventArgs e){if(!Capture)dragging=false;base.OnMouseCaptureChanged(e);}
+ void AttachDrag(Control c){}
+ public bool PreFilterMessage(ref Message m){
+  if(IsDisposed||!Visible)return false;
+  if(dragging){
+   if(m.Msg==0x0200){var p=Cursor.Position;Location=new Point(dragOrigin.X+p.X-dragMouse.X,dragOrigin.Y+p.Y-dragMouse.Y);return true;}
+   if(m.Msg==0x0205){EndDrag();return true;}
+   if(m.Msg==0x0100&&m.WParam.ToInt32()==0x1b){dragging=false;Capture=false;return true;}
+  }
+  if(m.Msg!=0x0204)return false;
+  var target=Control.FromHandle(m.HWnd);if(target!=this&&(target==null||!Contains(target)))return false;
+  BeginDrag(Cursor.Position);return true;
  }
- protected override void WndProc(ref Message m){if(m.Msg==0x0312 && m.WParam.ToInt32()==814){ShowMenu();return;}if(m.Msg==0x0312&&m.WParam.ToInt32()==815){ToggleDesktop();return;}base.WndProc(ref m);}
- void HideMenu(){hiddenByUser=true;Hide();if(timerWindow!=null)timerWindow.Close();}
+ protected override void WndProc(ref Message m){if(m.Msg==0x0021){m.Result=new IntPtr(3);return;}if(m.Msg==0x0312 && m.WParam.ToInt32()==814){ShowMenu();return;}if(m.Msg==0x0312&&m.WParam.ToInt32()==815){ToggleDesktop();return;}base.WndProc(ref m);}
+ void HideMenu(){dragging=false;Capture=false;hiddenByUser=true;Hide();if(timerWindow!=null)timerWindow.Close();}
  void ShowMenu(){hiddenByUser=false;PlaceForGame();if(preview||HudVisible())Show();}
  void ExitPanel(){closing=true;Close();Application.ExitThread();}
  void ShutdownGame(){var game=RequireGame();store.Close();desktop.Restore();shuttingDown=true;PostMessage(game.Window,0x0010,IntPtr.Zero,IntPtr.Zero);}
  GameButton Make(string text,int x,int y,int width,int height,string tip,Action action) {
-  var b=new GameButton{Text=text,Bounds=new Rectangle(x,y,width,height)};
-  b.FlatAppearance.BorderColor=Color.FromArgb(158,217,236);b.Click+=(s,e)=>{try{action();}catch(Exception ex){Status(ex.Message,true);}};
+  var b=new GameButton{Text=text,Bounds=new Rectangle(x,y,width,height),TopColor=Color.FromArgb(20,130,185),BottomColor=Color.FromArgb(5,69,112)};
+  b.FlatAppearance.BorderColor=Color.FromArgb(158,217,236);b.Click+=(s,e)=>{try{if(preview&&text=="Store")return;action();}catch(Exception ex){Status(ex.Message,true);}};
   Controls.Add(b);tips.SetToolTip(b,tip);return b;
  }
  void Status(string text,bool error){tips.SetToolTip(clock,text);if(!preview){tray.BalloonTipTitle="Morbid Kitty";tray.BalloonTipText=text;tray.BalloonTipIcon=error?ToolTipIcon.Warning:ToolTipIcon.Info;tray.ShowBalloonTip(3000);}}
@@ -287,12 +314,12 @@ public sealed class CommunityPanel:Form {
  [DllImport("kernel32.dll")] static extern ulong GetTickCount64();
  Rectangle GameRectangle(){var g=Selected();RectNative r;if(g==null||g.Window==IntPtr.Zero||!GetClientRect(g.Window,out r))return Rectangle.Empty;var origin=new PointNative();if(!ClientToScreen(g.Window,ref origin))return Rectangle.Empty;return new Rectangle(origin.X,origin.Y,r.Right-r.Left,r.Bottom-r.Top);}
  void PlaceForGame(){
-  if(preview||dragging)return;var r=GameRectangle();if(r.IsEmpty)return;
+  if(preview||dragging)return;var r=GameRectangle();if(r.IsEmpty)return;if(!placementDirty&&r==placedGame&&Size==placedSize)return;placedGame=r;placedSize=Size;placementDirty=false;
   int x=state.UserPosition?(int)Math.Round(state.RelativeX*r.Width):r.Width-Width-24;
   int y=state.UserPosition?(int)Math.Round(state.RelativeY*r.Height):(int)Math.Round(r.Height*.35);
   positioning=true;Location=new Point(r.Left+Math.Max(0,Math.Min(x,r.Width-Width)),r.Top+Math.Max(0,Math.Min(y,r.Height-Height)));positioning=false;
  }
- void SavePlacement(){if(positioning||preview)return;var r=GameRectangle();if(r.IsEmpty)return;state.RelativeX=(double)(Left-r.Left)/r.Width;state.RelativeY=(double)(Top-r.Top)/r.Height;state.UserPosition=true;dirty=true;Persist();}
+ void SavePlacement(){if(positioning||preview)return;var r=GameRectangle();if(r.IsEmpty)return;state.RelativeX=(double)(Left-r.Left)/r.Width;state.RelativeY=(double)(Top-r.Top)/r.Height;state.UserPosition=true;placementDirty=true;dirty=true;Persist();}
  bool HudVisible(){
   if(preview)return true;if(hudView==null||bound==null||bound.Window==IntPtr.Zero||IsIconic(bound.Window))return false;
   try{
@@ -356,21 +383,21 @@ public sealed class CommunityPanel:Form {
  void UpdateTimerNotices(){
   for(int i=0;i<state.Alarms.Count;i++){
    if(!state.Alarms[i].Finished){CloseTimerNotice(i);continue;}
-   if(!timerNotices.ContainsKey(i)){int index=i;timerNotices[i]=new TimerNotice(state.Alarms[i].Name,Font,()=>DismissTimerNotice(index));}
+   if(!timerNotices.ContainsKey(i)){int index=i;timerNotices[i]=new TimerNotice(state.Alarms[i].Name,timerFont,()=>DismissTimerNotice(index));}
   }
   var game=GameRectangle();uint front;GetWindowThreadProcessId(GetForegroundWindow(),out front);
   bool show=bound!=null&&!game.IsEmpty&&!IsIconic(bound.Window)&&(front==bound.Id||front==Process.GetCurrentProcess().Id||(voiceSession&&WindowsVoice.Owns(front))||store.Owns(GetForegroundWindow()));
   var items=timerNotices.OrderBy(pair=>pair.Key).ToArray();int height=Math.Max(14,(int)Math.Round(28*uiScale)),gap=Math.Max(3,(int)Math.Round(6*uiScale));int stackHeight=items.Length*height+Math.Max(0,items.Length-1)*gap;
   for(int row=0;row<items.Length;row++){
    var item=items[row];if(!show){item.Value.Hide();continue;}
-   item.Value.Fit(state.Alarms[item.Key].Name,game.Width-32,uiScale,Font);item.Value.Location=new Point(game.Left+(game.Width-item.Value.Width)/2,game.Top+(game.Height-stackHeight)/2+row*(height+gap));
+   item.Value.Fit(state.Alarms[item.Key].Name,game.Width-32,uiScale,timerFont);item.Value.Location=new Point(game.Left+(game.Width-item.Value.Width)/2,game.Top+(game.Height-stackHeight)/2+row*(height+gap));
    if(!item.Value.Visible)item.Value.Show();
   }
  }
  void ShowTimers(){
   if(timerWindow!=null && !timerWindow.IsDisposed){timerWindow.Show();timerWindow.Activate();return;}
   countdowns.Clear();startButtons.Clear();
-  timerWindow=new TimerMenu{Text="Six reminder timers",ClientSize=new Size(504,234),Font=Font,ForeColor=ForeColor};
+  timerWindow=new TimerMenu{Text="Six reminder timers",ClientSize=new Size(504,234),Font=timerFont,ForeColor=ForeColor};
   var game=GameRectangle();if(game.IsEmpty)game=Screen.FromControl(this).WorkingArea;timerWindow.Location=new Point(Math.Max(game.Left,game.Right-timerWindow.Width-14),Math.Max(game.Top,game.Bottom-timerWindow.Height-14));
   string[] headings={"Name","Days","Hrs","Min","Sec","Time left"};int[] columns={8,112,152,192,232,276};
   for(int h=0;h<headings.Length;h++)timerWindow.Controls.Add(new Label{Text=headings[h],Bounds=new Rectangle(columns[h],7,h==0?98:h==5?80:38,18),BackColor=Color.Transparent,Cursor=Cursors.SizeAll});
@@ -394,7 +421,7 @@ public sealed class CommunityPanel:Form {
   if(timerWindow==null)return;
   timerWindow.SuspendLayout();
   foreach(var pair in timerBounds){var r=pair.Value;pair.Key.Bounds=new Rectangle((int)Math.Round(r.X*scale),(int)Math.Round(r.Y*scale),Math.Max(1,(int)Math.Round(r.Width*scale)),Math.Max(1,(int)Math.Round(r.Height*scale)));}
-  timerWindow.Font=Font;timerWindow.ClientSize=new Size((int)Math.Round(504*scale),(int)Math.Round(234*scale));timerWindow.ResumeLayout();
+  timerWindow.Font=timerFont;timerWindow.ClientSize=new Size((int)Math.Round(504*scale),(int)Math.Round(234*scale));timerWindow.ResumeLayout();
  }
  void UpdateDockShortcuts(bool eligible,Rectangle game){
   if(hudView==null){foreach(var badge in dockShortcuts)badge.Hide();return;}
@@ -404,13 +431,14 @@ public sealed class CommunityPanel:Form {
    var rects=new Rectangle[8];
    for(int i=0;i<8;i++){long offset=72+i*16;float x=hudView.ReadSingle(offset),y=hudView.ReadSingle(offset+4),w=hudView.ReadSingle(offset+8),h=hudView.ReadSingle(offset+12);if(!Single.IsNaN(x)&&!Single.IsNaN(y)&&w>0&&h>0&&x>=0&&y>=0&&x+w<=1.01f&&y+h<=1.01f)rects[i]=new Rectangle(game.Left+(int)(x*game.Width),game.Top+(int)(y*game.Height),(int)(w*game.Width),(int)(h*game.Height));}
    if(seq!=hudView.ReadUInt32(8))return;
-   if(!Single.IsNaN(scale)&&!Single.IsInfinity(scale)&&scale>=.25f&&scale<=3&&Math.Abs(scale-uiScale)>.005){LayoutController(scale);ScaleTimerWindow(scale);}
+   if(!Single.IsNaN(scale)&&!Single.IsInfinity(scale)&&scale>=.25f&&scale<=3&&Math.Abs((scale=(float)Math.Round(scale,2))-uiScale)>.015){LayoutController(scale);ScaleTimerWindow(scale);}
    for(int i=0;i<8;i++){var badge=dockShortcuts[i];if(eligible&&(mask&(1u<<i))!=0&&!rects[i].IsEmpty){badge.Place(rects[i],uiScale);if(!badge.Visible)badge.Show();}else badge.Hide();}
    if(pendingShip>0&&answerSeq!=lastShipSequence){lastShipSequence=answerSeq;if(Math.Abs(answer)==pendingShip){if(answer<0)Status("Ship "+pendingShip+" could not be selected in the current game view",true);pendingShip=0;}}
   }catch{foreach(var badge in dockShortcuts)badge.Hide();}
  }
  void UpdateUi(){
   if(closing)return;
+  if(dragging&&(GetAsyncKeyState(2)&0x8000)==0)EndDrag();
   var now=DateTime.UtcNow;
   if(!preview && now>=nextBind){nextBind=now.AddSeconds(1);RefreshGames();if(bound==null && (attachedPid>0||shuttingDown)){ExitPanel();return;}if(bound!=null && state.Borderless)desktop.Apply(bound.Window);}
   if(!preview){
@@ -440,9 +468,8 @@ public sealed class CommunityPanel:Form {
   HideMenu();if(Visible||IsDisposed)throw new Exception("Hide closed the controller");
   var message=Message.Create(Handle,0x0312,new IntPtr(814),IntPtr.Zero);WndProc(ref message);if(!Visible||hiddenByUser)throw new Exception("F8 did not restore hidden controller");
   HideMenu();summon.Show();SendMessage(summon.Handle,0x0205,IntPtr.Zero,IntPtr.Zero);Application.DoEvents();if(!Visible||hiddenByUser)throw new Exception("Right-edge handle did not restore hidden controller");summon.Hide();
-  var oldCursor=Cursor.Position;var origin=Location;var target=clock;Cursor.Position=target.PointToScreen(new Point(8,8));SendMessage(target.Handle,0x0204,new IntPtr(2),new IntPtr(8|(8<<16)));Cursor.Position=new Point(Cursor.Position.X+24,Cursor.Position.Y+15);SendMessage(target.Handle,0x0200,new IntPtr(2),new IntPtr(8|(8<<16)));SendMessage(target.Handle,0x0205,IntPtr.Zero,new IntPtr(8|(8<<16)));Application.DoEvents();if(Location!=new Point(origin.X+24,origin.Y+15))throw new Exception("Right-drag did not move the controller");Location=origin;Cursor.Position=oldCursor;
-  LayoutController(1.25f);if(Width!=132||clock.Height!=35)throw new Exception("Controller UI scaling failed");LayoutController(1);
-  using(var badge=new DockShortcut(3,()=>{})){badge.Place(new Rectangle(50,70,100,90),1);if(badge.Left!=52||badge.Top!=72)throw new Exception("Dock anchor placement failed");}
+  LayoutController(1.25f);if(Width!=88||clock.Height!=23)throw new Exception("Controller size baseline failed");LayoutController(1);
+  using(var badge=new DockShortcut(3,()=>{})){badge.Place(new Rectangle(50,70,100,90),1);if(badge.Left!=52||badge.Top!=124)throw new Exception("Dock lower-corner anchor placement failed");}
   if(!new PanelState().Borderless)throw new Exception("Old panel settings must default to borderless");
   if(state.Alarms.Count<6)throw new Exception("Six timers missing");
   var a=new AlarmState{Name="Days test",DurationSeconds=2*86400+3*3600+4*60+5};ResetAlarm(a);if(a.Remaining!=183845)throw new Exception("Day/hour/minute/second duration failed");
@@ -461,7 +488,7 @@ public sealed class CommunityPanel:Form {
   using(var bmp=new Bitmap(timerWindow.Width,timerWindow.Height)){timerWindow.DrawToBitmap(bmp,new Rectangle(0,0,timerWindow.Width,timerWindow.Height));bmp.Save(Path.Combine(directory,"community-timers.png"));}
  }
  [STAThread] public static int Main(string[] args){
-  Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+  DesktopDpi.Initialize();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
   try{
    if(args.Length==2 && args[0]=="--verify-ui"){
     using(var panel=new CommunityPanel(0,false,true)){panel.WriteUiEvidence(args[1]);panel.closing=true;}
