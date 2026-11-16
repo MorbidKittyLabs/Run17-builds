@@ -16,7 +16,7 @@ jobs:
         run: |
           New-Item package -ItemType Directory | Out-Null
           $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $compiler /nologo /codepage:65001 /target:exe /platform:x64 /optimize+ /main:MorbidRecovery /out:package/MorbidKitty-Recovery.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll recovery/MorbidRecovery.cs community-r18/Community-Common.cs community-r18/MorbidKitty-Setup.cs
+          & $compiler /nologo /codepage:65001 /target:exe /platform:x64 /optimize+ /main:MorbidRecovery /out:package\MorbidKitty-Recovery.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll .\recovery\MorbidRecovery.cs .\community-r18\Community-Common.cs .\community-r18\MorbidKitty-Setup.cs
           if ($LASTEXITCODE -ne 0) { throw 'Recovery compilation failed' }
           & ./package/MorbidKitty-Recovery.exe --self-test "$env:RUNNER_TEMP/recovery-fixture"
           if ($LASTEXITCODE -ne 0) { throw 'Recovery verification failed' }
