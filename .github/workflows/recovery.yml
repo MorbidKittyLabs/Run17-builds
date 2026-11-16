@@ -1,0 +1,60 @@
+name: Run17 R18 recovery tool
+on:
+  push:
+    paths: ['recovery/**', '.github/workflows/recovery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile and verify recovery against isolated installations
+        shell: pwsh
+        run: |
+          New-Item package -ItemType Directory | Out-Null
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /codepage:65001 /target:exe /platform:x64 /optimize+ /main:MorbidRecovery /out:package/MorbidKitty-Recovery.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.Serialization.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll recovery/MorbidRecovery.cs community-r18/Community-Common.cs community-r18/MorbidKitty-Setup.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Recovery compilation failed' }
+          & ./package/MorbidKitty-Recovery.exe --self-test "$env:RUNNER_TEMP/recovery-fixture"
+          if ($LASTEXITCODE -ne 0) { throw 'Recovery verification failed' }
+          Copy-Item "$env:RUNNER_TEMP/recovery-fixture/recovery-validation.txt" package/
+          Copy-Item recovery/README.txt package/
+          Copy-Item community-r18/LICENSE package/
+          New-Item package/source -ItemType Directory | Out-Null
+          Copy-Item recovery/MorbidRecovery.cs,community-r18/Community-Common.cs,community-r18/MorbidKitty-Setup.cs package/source/
+      - name: Scan with updated Microsoft Defender
+        shell: powershell
+        run: |
+          $script=Get-Content community-r18/scan_defender.ps1 -Raw
+          $script=$script.Replace("'version.dll'", "'MorbidKitty-Recovery.exe'").Replace('DLL SHA256:', 'Recovery EXE SHA256:')
+          & ([scriptblock]::Create($script))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Run17-R18-Recovery-Defender
+          path: package/
+  scan:
+    needs: recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Run17-R18-Recovery-Defender
+          path: package
+      - name: Scan with ClamAV and package recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav
+          sudo systemctl stop clamav-freshclam.service || true
+          sudo freshclam
+          clamscan --recursive --allmatch package/ | tee package/ClamAV-Scan.txt
+          sha256sum package/MorbidKitty-Recovery.exe > package/SHA256SUMS.txt
+          (cd package && zip -r ../MorbidKitty-Run17-R18-Recovery.zip .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Run17-R18-Recovery-Scanned
+          path: MorbidKitty-Run17-R18-Recovery.zip
