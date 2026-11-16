@@ -71,31 +71,25 @@ public sealed class TimerAudio:IDisposable {
  }
  public void Dispose(){lock(gate){disposed=true;pending=0;}}
 }
-public sealed class TimerMenu:Form,IMessageFilter {
- bool moving,filterInstalled;int dragButton;Point dragMouse,dragOrigin;
+public sealed class TimerMenu:Form {
+ bool moving;MouseButtons dragButton;Point dragMouse,dragOrigin;
  public TimerMenu(){
   AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);
   FormBorderStyle=FormBorderStyle.None;ControlBox=false;MinimizeBox=false;MaximizeBox=false;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;
   BackColor=Color.FromArgb(6,51,79);DoubleBuffered=true;
+  MouseDown+=(o,e)=>BeginMove(this,e);
+  FormClosing+=(o,e)=>{moving=false;Capture=false;};
  }
- protected override void OnShown(EventArgs e){base.OnShown(e);if(!filterInstalled){Application.AddMessageFilter(this);filterInstalled=true;}}
- protected override void Dispose(bool disposing){if(disposing&&filterInstalled){Application.RemoveMessageFilter(this);filterInstalled=false;}base.Dispose(disposing);}
+ protected override void OnControlAdded(ControlEventArgs e){base.OnControlAdded(e);var control=e.Control;control.MouseDown+=(o,m)=>BeginMove(control,m);}
+ void BeginMove(Control source,MouseEventArgs e){
+  if(e.Button!=MouseButtons.Right&&(e.Button!=MouseButtons.Left||(source!=this&&!(source is Label))))return;
+  dragButton=e.Button;dragMouse=Cursor.Position;dragOrigin=Location;moving=true;Capture=true;
+ }
+ protected override void OnMouseMove(MouseEventArgs e){base.OnMouseMove(e);if(moving){var p=Cursor.Position;Location=new Point(dragOrigin.X+p.X-dragMouse.X,dragOrigin.Y+p.Y-dragMouse.Y);}}
+ protected override void OnMouseUp(MouseEventArgs e){base.OnMouseUp(e);if(moving&&e.Button==dragButton){moving=false;Capture=false;}}
+ protected override void OnMouseCaptureChanged(EventArgs e){if(!Capture)moving=false;base.OnMouseCaptureChanged(e);}
  protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);BeveledFace.Paint(e.Graphics,ClientRectangle,String.Empty,Font,ForeColor,Color.FromArgb(13,100,145),Color.FromArgb(6,51,79));}
  protected override void OnSizeChanged(EventArgs e){base.OnSizeChanged(e);if(Width>0&&Height>0)using(var path=BeveledFace.Shape(ClientRectangle,5)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}}
- protected override void OnMouseCaptureChanged(EventArgs e){if(!Capture)moving=false;base.OnMouseCaptureChanged(e);}
- public bool PreFilterMessage(ref Message m){
-  if(IsDisposed||!Visible)return false;
-  if(moving){
-   if(m.Msg==0x0200){var cursor=Cursor.Position;Location=new Point(dragOrigin.X+cursor.X-dragMouse.X,dragOrigin.Y+cursor.Y-dragMouse.Y);return true;}
-   if(m.Msg==dragButton){moving=false;Capture=false;return true;}
-   if(m.Msg==0x0100&&m.WParam.ToInt32()==0x1b){moving=false;Capture=false;return true;}
-  }
-  if(m.Msg!=0x0201&&m.Msg!=0x0204)return false;
-  var target=Control.FromHandle(m.HWnd);if(target==null||(target!=this&&!Contains(target)))return false;
-  // Left clicks keep editing and button actions. Right-drag works over every child.
-  if(m.Msg==0x0201&&target!=this&&!(target is Label))return false;
-  dragMouse=Cursor.Position;dragOrigin=Location;dragButton=m.Msg==0x0204?0x0205:0x0202;moving=true;Capture=true;return true;
- }
 }
 public sealed class TimerNotice:Form {
  readonly GameButton caption,close;
