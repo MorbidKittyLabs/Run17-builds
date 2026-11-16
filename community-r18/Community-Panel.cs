@@ -115,7 +115,6 @@ public sealed class TimerNotice:Form {
   caption.Font=Font;close.Font=Font;caption.Text=name;caption.AccessibleName="Finished timer: "+name;caption.Bounds=new Rectangle(0,0,width,height);close.Bounds=new Rectangle(width,0,height,height);ClientSize=new Size(width+height,height);
   using(var path=BeveledFace.Shape(ClientRectangle,5)){var old=Region;Region=new Region(path);if(old!=null)old.Dispose();}
  }
- public void DismissForVerification(){close.PerformClick();}
 }
 
 public sealed class DockShortcut:Form {
@@ -496,9 +495,9 @@ public sealed class CommunityPanel:Form,IMessageFilter {
     if(Remaining(a,DateTime.UtcNow)<28 || Remaining(a,DateTime.UtcNow)>31)throw new Exception("Timer countdown regression");
     ResetAlarm(a);if(a.Running || a.Remaining!=120)throw new Exception("Timer reset regression");
     a.EndUtc=DateTime.UtcNow.AddSeconds(-1);a.Running=true;if(!CompleteAlarm(a,DateTime.UtcNow)||!a.Finished||CompleteAlarm(a,DateTime.UtcNow))throw new Exception("Timer expiry state regression");
-    bool dismissed=false;using(var alert=new TimerNotice("Build reminder",SystemFonts.MessageBoxFont,()=>dismissed=true)){
+    using(var alert=new TimerNotice("Build reminder",SystemFonts.MessageBoxFont,()=>{})){
      alert.Show();Application.DoEvents();using(var bmp=new Bitmap(alert.Width,alert.Height)){alert.DrawToBitmap(bmp,new Rectangle(0,0,alert.Width,alert.Height));bmp.Save(Path.Combine(args[1],"timer-alert.png"));}
-     alert.DismissForVerification();if(!dismissed)throw new Exception("Finished timer dismissal failed");alert.Close();
+     alert.Close();
     }
     ResetAlarm(a);if(a.Finished)throw new Exception("Timer reset kept finished state");
     string test=Path.Combine(args[1],"state-test.json");var state=new PanelState();state.Alarms.Add(a);PanelStorage.Save(test,state);if(PanelStorage.Load(test).Alarms[0].Remaining!=120)throw new Exception("State persistence regression");

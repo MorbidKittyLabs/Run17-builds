@@ -48,6 +48,7 @@ public static class MouseInputVerification {
      Click(panel.Controls.OfType<Button>().Single(b=>b.AccessibleName=="Hide controller"));Require(!panel.Visible,"Physical controller X did not hide panel");Call(panel,"ShowMenu");Pump();
      var origin=panel.Location;var clock=panel.Controls.OfType<Label>().Single();var point=clock.PointToScreen(new Point(clock.Width/2,clock.Height/2));Move(point);MouseEvent(8);Move(new Point(point.X+30,point.Y+20));MouseEvent(16);Pump();Require(panel.Location==new Point(origin.X+30,origin.Y+20),"Physical right-drag failed");Require(!panel.Capture,"Right-drag retained mouse capture");
      int shipClicks=0;using(var badge=new DockShortcut(6,()=>shipClicks++)){badge.Place(new Rectangle(200,400,80,85),scale);badge.Show();game.Activate();SetForegroundWindow(game.Handle);Pump();Click(badge.Controls[0]);Require(shipClicks==1,"Physical dock-number click failed");badge.Close();}
+     bool dismissed=false;using(var alert=new TimerNotice("Input fixture reminder",SystemFonts.MessageBoxFont,()=>dismissed=true)){alert.Location=new Point(150,300);alert.Show();game.Activate();SetForegroundWindow(game.Handle);Pump();Click(alert.Controls.OfType<Button>().Single(b=>b.AccessibleName=="Dismiss finished timer"));Require(dismissed,"Physical timer alert X failed");alert.Close();}
      panel.Location=new Point(550,220);
     }
     typeof(CommunityPanel).GetField("closing",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(panel,true);panel.Close();game.Close();
