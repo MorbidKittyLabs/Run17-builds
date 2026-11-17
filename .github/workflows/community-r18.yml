@@ -1,7 +1,5 @@
 name: Build and scan Morbid Kitty Run17 R18
 on:
-  push:
-    paths: ['community-r18/**', '.github/workflows/community-r18.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -75,7 +73,7 @@ jobs:
           Copy-Item (Join-Path $toolRoot 'assets/*') $toolRoot
           $refs=@('/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/r:System.Runtime.Serialization.dll','/r:System.IO.Compression.dll','/r:System.IO.Compression.FileSystem.dll')
           $wpf=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/WPF'
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'Community-Panel.exe')) $common (Join-Path $toolRoot 'Community-Panel.cs') (Join-Path $toolRoot 'Community-Desktop.cs') (Join-Path $toolRoot 'Community-Voice.cs') /r:System.Management.dll ('/r:'+(Join-Path $wpf 'UIAutomationClient.dll')) ('/r:'+(Join-Path $wpf 'UIAutomationTypes.dll')) ('/r:'+(Join-Path $wpf 'WindowsBase.dll'))
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'Community-Panel.exe')) $common (Join-Path $toolRoot 'Community-Panel.cs') (Join-Path $toolRoot 'Community-Desktop.cs') (Join-Path $toolRoot 'Community-Voice.cs') (Join-Path $toolRoot 'UiWork.cs') /r:System.Management.dll ('/r:'+(Join-Path $wpf 'UIAutomationClient.dll')) ('/r:'+(Join-Path $wpf 'UIAutomationTypes.dll')) ('/r:'+(Join-Path $wpf 'WindowsBase.dll'))
           if ($LASTEXITCODE -ne 0) { throw 'Panel build failed' }
           & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ @refs ('/win32icon:'+$icon) ('/out:'+(Join-Path $toolRoot 'MorbidKitty-Launcher.exe')) $common (Join-Path $toolRoot 'MorbidKitty-Launcher.cs')
           if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed' }

@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -41,7 +42,7 @@ public sealed class GameDesktop:IDisposable {
   if(!marked){MarkFullscreen(window,true);marked=true;}
   Rect r;if(!GetWindowRect(window,out r))return;
   if(now!=wanted || r.Left!=target.Left || r.Top!=target.Top || r.Right-r.Left!=target.Width || r.Bottom-r.Top!=target.Height)
-   SetWindowPos(window,IntPtr.Zero,target.Left,target.Top,target.Width,target.Height,0x0020|0x0010|0x0004);
+   SetWindowPos(window,IntPtr.Zero,target.Left,target.Top,target.Width,target.Height,0x4000|0x0020|0x0010|0x0004);
  }
  public void Restore(){if(window!=IntPtr.Zero && IsWindow(window)){MarkFullscreen(window,false);SetWindowLong(window,-16,style);SetWindowPlacement(window,ref original);SetWindowPos(window,IntPtr.Zero,0,0,0,0,0x0020|0x0010|0x0004|0x0001|0x0002);}window=IntPtr.Zero;marked=false;}
  public void Dispose(){Restore();}
@@ -56,7 +57,7 @@ public sealed class GameDesktop:IDisposable {
 
 public sealed class SummonHandle:Form {
  public event EventHandler Summon;
- public SummonHandle(){AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);Text="Morbid Kitty menu handle";AccessibleName="Click the green arrow to show the controller";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;ClientSize=new Size(12,42);BackColor=Color.Magenta;TransparencyKey=Color.Magenta;ForeColor=Color.FromArgb(157,255,93);Cursor=Cursors.Hand;Font=new Font("Tahoma",14,FontStyle.Bold);var tip=new ToolTip();tip.SetToolTip(this,"Click: show controls • F8 also restores them");FormClosed+=(s,e)=>tip.Dispose();}
+ public SummonHandle(){AutoScaleMode=AutoScaleMode.None;MinimumSize=new Size(1,1);Text="Morbid Kitty menu handle";AccessibleName="Click the green arrow to show the controller";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;ClientSize=new Size(12,42);BackColor=Color.Magenta;TransparencyKey=Color.Magenta;ForeColor=Color.FromArgb(157,255,93);Cursor=Cursors.Hand;Font=PixelFonts.Create("Tahoma",14,FontStyle.Bold);var tip=new ToolTip();tip.SetToolTip(this,"Click: show controls • F8 also restores them");FormClosed+=(s,e)=>tip.Dispose();}
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
  protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);TextRenderer.DrawText(e.Graphics,"‹",Font,ClientRectangle,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);}
@@ -64,7 +65,8 @@ public sealed class SummonHandle:Form {
  public void Place(Rectangle game,int y){Location=new System.Drawing.Point(game.Right-Width,Math.Max(game.Top,Math.Min(y,game.Bottom-Height)));}
 }
 
-public sealed class CommunityStore {
+public sealed class CommunityStore:IDisposable {
+ public sealed class Owner {public uint Id;public long Created;}
  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback,IntPtr value);
  delegate bool EnumProc(IntPtr h,IntPtr value);
  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
@@ -72,11 +74,44 @@ public sealed class CommunityStore {
  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h,uint message,IntPtr w,IntPtr l);
  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
  readonly string profile=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"STFC-Community","StoreBrowser");
- HashSet<uint> owners=new HashSet<uint>();DateTime nextRefresh;bool opened;
- public static bool ProfileMatches(string command,string profile){return !String.IsNullOrEmpty(command) && command.IndexOf("--user-data-dir=\""+profile+"\"",StringComparison.OrdinalIgnoreCase)>=0;}
- void Refresh(){if(!opened||DateTime.UtcNow<nextRefresh)return;nextRefresh=DateTime.UtcNow.AddSeconds(1);var found=new HashSet<uint>();try{using(var query=new ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='msedge.exe' OR Name='chrome.exe'"))using(var results=query.Get())foreach(ManagementObject p in results)using(p)if(ProfileMatches(Convert.ToString(p["CommandLine"]),profile))found.Add(Convert.ToUInt32(p["ProcessId"]));owners=found;}catch{}}
- List<IntPtr> Windows(){Refresh();var windows=new List<IntPtr>();EnumWindows((h,l)=>{uint pid;GetWindowThreadProcessId(h,out pid);if(owners.Contains(pid)&&IsWindowVisible(h))windows.Add(h);return true;},IntPtr.Zero);return windows;}
- public bool Owns(IntPtr window){Refresh();uint pid;GetWindowThreadProcessId(window,out pid);return owners.Contains(pid);}
- public void Open(Rectangle game){opened=true;var windows=Windows();if(windows.Count>0){SetForegroundWindow(windows[0]);return;}string browser=null;foreach(string folder in new[]{Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)})foreach(string rel in new[]{@"Microsoft\Edge\Application\msedge.exe",@"Google\Chrome\Application\chrome.exe"}){string path=Path.Combine(folder,rel);if(browser==null&&File.Exists(path))browser=path;}if(browser==null)throw new InvalidOperationException("The separate Store window needs Microsoft Edge or Google Chrome.");int w=Math.Max(480,game.Width*3/5),h=Math.Max(400,game.Height*3/4);string args="--app=https://home.startrekfleetcommand.com/store --user-data-dir="+GamePaths.Quote(profile)+" --no-first-run --no-default-browser-check --window-size="+w+","+h+" --window-position="+(game.Right-w-20)+","+(game.Top+30);using(var p=Process.Start(new ProcessStartInfo(browser,args){UseShellExecute=true})){if(p!=null)owners.Add((uint)p.Id);}nextRefresh=DateTime.MinValue;}
- public void Close(){nextRefresh=DateTime.MinValue;foreach(var h in Windows())PostMessage(h,0x0010,IntPtr.Zero,IntPtr.Zero);}
+ readonly object gate=new object();readonly UiWork<Owner[]> discovery=new UiWork<Owner[]>();readonly UiWork<Owner> launch=new UiWork<Owner>();
+ readonly Func<string,Owner[]> discover;readonly Func<string,Rectangle,Owner> start;
+ Dictionary<uint,long> owners=new Dictionary<uint,long>();DateTime nextRefresh;bool opened,disposed;int generation;
+ public CommunityStore(Func<string,Owner[]> find=null,Func<string,Rectangle,Owner> open=null){discover=find??FindOwners;start=open??StartBrowser;}
+ public static bool ProfileMatches(string command,string profile){return !String.IsNullOrEmpty(command)&&command.IndexOf("--user-data-dir="+GamePaths.Quote(profile),StringComparison.OrdinalIgnoreCase)>=0;}
+ static Owner Describe(Process p){return p==null?null:new Owner{Id=(uint)p.Id,Created=p.StartTime.ToFileTimeUtc()};}
+ static Owner[] FindOwners(string profile){
+  var found=new List<Owner>();
+  var options=new EnumerationOptions{Timeout=TimeSpan.FromSeconds(2),ReturnImmediately=true};
+  using(var query=new ManagementObjectSearcher(new ManagementScope(),new ObjectQuery("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='msedge.exe' OR Name='chrome.exe'"),options))
+  using(var results=query.Get())foreach(ManagementObject item in results)using(item)if(ProfileMatches(Convert.ToString(item["CommandLine"]),profile))try{using(var p=Process.GetProcessById((int)Convert.ToUInt32(item["ProcessId"])))found.Add(Describe(p));}catch{}
+  return found.ToArray();
+ }
+ static Owner StartBrowser(string profile,Rectangle game){
+  string browser=null;foreach(string folder in new[]{Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)})foreach(string rel in new[]{@"Microsoft\Edge\Application\msedge.exe",@"Google\Chrome\Application\chrome.exe"}){string path=Path.Combine(folder,rel);if(browser==null&&File.Exists(path))browser=path;}
+  if(browser==null)throw new InvalidOperationException("The separate Store window needs Microsoft Edge or Google Chrome.");
+  int w=Math.Max(480,game.Width*3/5),h=Math.Max(400,game.Height*3/4);
+  string args="--app=https://home.startrekfleetcommand.com/store --user-data-dir="+GamePaths.Quote(profile)+" --no-first-run --no-default-browser-check --window-size="+w+","+h+" --window-position="+(game.Right-w-20)+","+(game.Top+30);
+  using(var p=Process.Start(new ProcessStartInfo(browser,args){UseShellExecute=false}))return Describe(p);
+ }
+ void Add(Owner owner){if(owner!=null)lock(gate)owners[owner.Id]=owner.Created;}
+ Dictionary<uint,long> Snapshot(){lock(gate)return new Dictionary<uint,long>(owners);}
+ static bool SameProcess(uint pid,long created){try{using(var p=Process.GetProcessById((int)pid))return !p.HasExited&&p.StartTime.ToFileTimeUtc()==created;}catch{return false;}}
+ static List<IntPtr> Windows(Dictionary<uint,long> owned){var windows=new List<IntPtr>();EnumWindows((h,l)=>{uint pid;GetWindowThreadProcessId(h,out pid);long created;if(owned.TryGetValue(pid,out created)&&IsWindowVisible(h)&&SameProcess(pid,created))windows.Add(h);return true;},IntPtr.Zero);return windows;}
+ public bool Owns(IntPtr window){uint pid;GetWindowThreadProcessId(window,out pid);lock(gate)return owners.ContainsKey(pid);}
+ public void Pump(DateTime now){
+  if(disposed)return;launch.Pump(now);discovery.Pump(now);
+  if(opened&&now>=nextRefresh&&!discovery.Busy){nextRefresh=now.AddSeconds(3);discovery.Start(()=>discover(profile),TimeSpan.FromSeconds(2),(found,error)=>{if(error==null&&found!=null)foreach(var owner in found)Add(owner);});}
+ }
+ public void Open(Rectangle game,Action<Exception> completed=null){
+  if(disposed)return;opened=true;int request=Interlocked.Increment(ref generation);var owned=Snapshot();
+  if(!launch.Start(()=>{
+   var windows=Windows(owned);if(windows.Count>0){if(request==Volatile.Read(ref generation))SetForegroundWindow(windows[0]);return null;}
+   if(request!=Volatile.Read(ref generation))return null;var owner=start(profile,game);
+   if(request!=Volatile.Read(ref generation)&&owner!=null){var single=new Dictionary<uint,long>{{owner.Id,owner.Created}};foreach(var h in Windows(single))PostMessage(h,0x0010,IntPtr.Zero,IntPtr.Zero);}
+   return owner;
+  },TimeSpan.FromSeconds(4),(owner,error)=>{if(error is TimeoutException)Interlocked.Increment(ref generation);Add(owner);if(completed!=null)completed(error);}))if(completed!=null)completed(new InvalidOperationException("The previous Store request is still finishing. The other controls remain available."));
+ }
+ public void Close(){Interlocked.Increment(ref generation);foreach(var h in Windows(Snapshot()))PostMessage(h,0x0010,IntPtr.Zero,IntPtr.Zero);}
+ public void Dispose(){if(disposed)return;disposed=true;Close();launch.Dispose();discovery.Dispose();}
 }

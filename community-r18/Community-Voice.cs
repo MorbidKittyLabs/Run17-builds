@@ -1,10 +1,14 @@
 using System;
 using System.Diagnostics;
 using System.Windows.Automation;
+using System.Threading;
+
+public sealed class VoiceProbe {public bool Closing,NeedsToggle,Open;}
 
 public static class WindowsVoice {
  public static bool Owns(uint pid){try{using(var p=Process.GetProcessById((int)pid))return p.ProcessName.Equals("TextInputHost",StringComparison.OrdinalIgnoreCase)||p.ProcessName.Equals("InputApp",StringComparison.OrdinalIgnoreCase);}catch{return false;}}
  static AutomationElement FindPanel(){
+  if(Thread.CurrentThread.GetApartmentState()!=ApartmentState.MTA)throw new InvalidOperationException("Windows voice inspection must run on its MTA worker.");
   try{
    var windows=AutomationElement.RootElement.FindAll(TreeScope.Children,Condition.TrueCondition);
    foreach(AutomationElement window in windows){
@@ -28,3 +32,4 @@ public static class WindowsVoice {
   needsToggle=true;return true;
  }
 }
+
