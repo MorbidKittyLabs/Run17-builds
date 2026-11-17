@@ -343,10 +343,10 @@ index 0000000..0a49662
 +}
 diff --git a/mods/src/community_panel.cc b/mods/src/community_panel.cc
 new file mode 100644
-index 0000000..0097649
+index 0000000..253ebfb
 --- /dev/null
 +++ b/mods/src/community_panel.cc
-@@ -0,0 +1,240 @@
+@@ -0,0 +1,241 @@
 +#include "community_panel.h"
 +#if _WIN32
 +#include "community_panel_policy.h"
@@ -567,6 +567,7 @@ index 0000000..0097649
 +  }
 +  auto* bar=fleet_ready?ActiveFleetBar():nullptr;
 +  DockRect docks[8]{};uint32_t dock_mask=0;
++  if(available&&!bar&&!dock_warning){dock_warning=true;spdlog::warn("[CommunityPanel] Fleet data is present but no rendered fleet-bar component was resolved; native object lookup requires runtime inspection");}
 +  if(bar&&Rendered(reinterpret_cast<Il2CppObject*>(bar))) {
 +   DiscoverDocks(bar,now);
 +   for(int i=0;i<8;i++)if((available&(1u<<i))&&dock_widgets[i]) {
@@ -625,10 +626,10 @@ index 0000000..b2bc7ec
 +}
 diff --git a/mods/src/community_panel_ui.inc b/mods/src/community_panel_ui.inc
 new file mode 100644
-index 0000000..6281cee
+index 0000000..14405db
 --- /dev/null
 +++ b/mods/src/community_panel_ui.inc
-@@ -0,0 +1,184 @@
+@@ -0,0 +1,226 @@
 +// Runtime UI observation. Included inside community_panel's private namespace.
 +// No new detours: all managed calls run in the existing main-thread Pump.
 +Il2CppClass* UiClass(const char* assembly,const char* ns,const char* name) {
@@ -701,19 +702,58 @@ index 0000000..6281cee
 + }
 + return -1;
 +}
++struct UiRoot {
++ Il2CppGCHandle handle=0;
++ explicit UiRoot(Il2CppObject* value){if(value)handle=il2cpp_gchandle_new(value,false);}
++ ~UiRoot(){if(handle)il2cpp_gchandle_free(handle);}
++};
++template<class Visitor> void SceneObjects(Il2CppClass* type,Visitor visit) {
++ if(!type)return;
++ static auto* object=UiClass("UnityEngine.CoreModule","UnityEngine","Object");
++ static auto* with_inactive=method_contract::Resolve(object,"FindObjectsOfType",true,"UnityEngine.Object[]",{"System.Type","System.Boolean"});
++ static auto* active_only=method_contract::Resolve(object,"FindObjectsOfType",true,"UnityEngine.Object[]",{"System.Type"});
++ bool include_inactive=false;void* args[]={il2cpp_type_get_object(il2cpp_class_get_type(type)),&include_inactive};
++ auto* array=reinterpret_cast<Il2CppArraySize*>(Invoke(with_inactive?with_inactive:active_only,nullptr,args));
++ if(!array||array->max_length>512)return;UiRoot root(reinterpret_cast<Il2CppObject*>(array));
++ for(size_t i=0;i<array->max_length;i++){auto* value=reinterpret_cast<Il2CppObject**>(array->vector)[i];if(value&&visit(value))break;}
++}
++bool UsableBar(FleetBarViewController* bar){
++ if(!bar||!Rendered(reinterpret_cast<Il2CppObject*>(bar)))return false;
++ auto* context=bar->CanvasContext();auto* data=context?context->FleetData():nullptr;
++ return data&&data->max_length>0&&data->max_length<=8;
++}
 +FleetBarViewController* ActiveFleetBar() {
-+ for(auto* bar:ObjectFinder<FleetBarViewController>::GetAll())
-+  if(bar&&Rendered(reinterpret_cast<Il2CppObject*>(bar))) {
-+   auto* context=bar->CanvasContext();auto* data=context?context->FleetData():nullptr;
-+   if(data&&data->max_length>0&&data->max_length<=8)return bar;
-+  }
-+ return nullptr;
++ for(auto* bar:ObjectFinder<FleetBarViewController>::GetAll())if(UsableBar(bar))return bar;
++ static Il2CppGCHandle scene_bar=0;static uint64_t next_scan=0;
++ auto* cached=scene_bar?reinterpret_cast<FleetBarViewController*>(il2cpp_gchandle_get_target(scene_bar)):nullptr;
++ if(UsableBar(cached))return cached;
++ auto now=GetTickCount64();if(now<next_scan)return nullptr;next_scan=now+2000;
++ if(scene_bar){il2cpp_gchandle_free(scene_bar);scene_bar=0;}
++ FleetBarViewController* found=nullptr;
++ SceneObjects(FleetBarViewController::get_class_helper().get_cls(),[&](Il2CppObject* item){
++  auto* bar=reinterpret_cast<FleetBarViewController*>(item);if(!UsableBar(bar))return false;
++  found=bar;scene_bar=il2cpp_gchandle_new_weakref(item,false);return true;
++ });
++ if(found)spdlog::info("[CommunityPanel] Fleet bar resolved from live Unity objects rather than constructor tracking");
++ return found;
++}
++Il2CppObject* ShipCanvas() {
++ static Il2CppGCHandle canvas=0;static uint64_t next_scan=0;
++ auto* cached=canvas?il2cpp_gchandle_get_target(canvas):nullptr;if(cached&&Rendered(cached))return cached;
++ auto now=GetTickCount64();if(now<next_scan)return nullptr;next_scan=now+2000;
++ if(canvas){il2cpp_gchandle_free(canvas);canvas=0;}
++ Il2CppObject* found=nullptr;
++ SceneObjects(UiClass("Assembly-CSharp","Digit.Client.UI","CanvasController"),[&](Il2CppObject* item){
++  auto name=UiName(item);if((name!="shipbar_canvas"&&name!="shipbar_canvas(clone)")||!Rendered(item))return false;
++  canvas=il2cpp_gchandle_new_weakref(item,false);found=item;return true;
++ });return found;
 +}
 +void DiscoverDocks(FleetBarViewController* bar,uint64_t now) {
 + if(now<next_dock_scan)return;next_dock_scan=now+1000;
 + for(auto& handle:dock_widgets)if(handle){il2cpp_gchandle_free(handle);handle=0;}
 + static auto* component=UiClass("UnityEngine.CoreModule","UnityEngine","Component");
-+ auto* array=Components(reinterpret_cast<Il2CppObject*>(bar),component,false,true);if(!array)return;
++ auto scan=[&](Il2CppObject* source){
++ auto* array=Components(source,component,false,true);if(!array)return;UiRoot root(reinterpret_cast<Il2CppObject*>(array));
 + for(size_t i=0;i<array->max_length;i++) {
 +  auto* item=reinterpret_cast<Il2CppObject**>(array->vector)[i];if(!item)continue;
 +  std::string_view type=il2cpp_class_get_name(item->klass);
@@ -737,7 +777,10 @@ index 0000000..6281cee
 +  int index=FleetIndex(Reference(item,"CanvasContext"));if(index<0)index=FleetIndex(Reference(item,"Context"));if(index<0)index=FleetIndex(item);
 +  if(index<0||index>=8||dock_widgets[index])continue;
 +  dock_widgets[index]=il2cpp_gchandle_new_weakref(item,false);
-+ }
++ } };
++ scan(reinterpret_cast<Il2CppObject*>(bar));
++ if(auto* canvas=ShipCanvas())scan(canvas);
++ static uint32_t last_mask=0xffffffffu;uint32_t resolved=0;for(int i=0;i<8;i++)if(dock_widgets[i])resolved|=1u<<i;if(resolved!=last_mask){last_mask=resolved;spdlog::info("[CommunityPanel] Dock discovery: tracked-bars={} native-ship-canvas={} widget-mask={}",ObjectFinder<FleetBarViewController>::GetAll().size(),ShipCanvas()!=nullptr,resolved);}
 +}
 +bool ExactDockBounds(Il2CppObject* item,DockRect& rect) {
 + if(!Rendered(item))return false;
@@ -769,7 +812,7 @@ index 0000000..6281cee
 + rect={left/w,(h-top)/h,(right-left)/w,(top-bottom)/h};return true;
 +}
 +bool DockBounds(Il2CppObject* item,DockRect& rect) {
-+ for(int depth=0;item&&depth<4;depth++) {
++ for(int depth=0;item&&depth<7;depth++) {
 +  if(ExactDockBounds(item,rect)&&rect.width<.2f&&rect.height<.3f)return true;
 +  item=Reference(Reference(item,"transform"),"parent");
 + }

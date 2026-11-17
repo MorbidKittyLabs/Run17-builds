@@ -1,5 +1,7 @@
 name: Build and scan Morbid Kitty Run17 R18
 on:
+  push:
+    paths: ['community-r18/**', '.github/workflows/community-r18.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -86,6 +88,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Mouse input fixture compilation failed' }
           & $inputTest ui-evidence
           if ($LASTEXITCODE -ne 0) { if (Test-Path mouse-input-error.txt) { Get-Content mouse-input-error.txt }; throw 'Physical mouse input verification failed' }
+          $serviceTest=Join-Path $toolRoot 'DpiServiceVerification.exe'
+          & $compiler /nologo /codepage:65001 /target:exe /platform:x64 /optimize+ @refs ('/r:'+(Join-Path $toolRoot 'Community-Panel.exe')) ('/out:'+$serviceTest) (Join-Path $toolRoot 'tests/DpiServiceVerification.cs')
+          if ($LASTEXITCODE -ne 0) { throw 'DPI/service fixture compilation failed' }
+          & $serviceTest ui-evidence
+          if ($LASTEXITCODE -ne 0) { if (Test-Path dpi-service-error.txt) { Get-Content dpi-service-error.txt }; throw 'DPI/service verification failed' }
+
 
       - uses: xmake-io/github-action-setup-xmake@v1.2.5
         with:
@@ -155,6 +163,7 @@ jobs:
             panel-error.txt
             installer-error.txt
             mouse-input-error.txt
+            dpi-service-error.txt
           if-no-files-found: ignore
   scan:
     needs: windows
@@ -186,7 +195,7 @@ jobs:
           name: Community-R18-Scanned
           path: |
             package/
-            MorbidKitty-Run17-R18-Input-Fix.zip
+            MorbidKitty-Run17-R18-DPI-Service-Fix.zip
             Community-R18-Source.zip
             SHA256SUMS.txt
           if-no-files-found: error
@@ -220,5 +229,6 @@ jobs:
           export_tree=$(git write-tree)
           export_commit=$(printf '%s\n' 'STFC Community R18 clean source export' | git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit-tree "$export_tree")
           git push origin "$export_commit:refs/heads/community-r18-source-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" package/MorbidKitty-Setup.exe MorbidKitty-Run17-R18-Input-Fix.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png package/morbid-installer.png package/morbid-intro.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "Morbid Kitty — Run17 R18 Installer" --notes-file community-r18/RELEASE-NOTES.md --prerelease
+          gh release create "$tag" package/MorbidKitty-Setup.exe MorbidKitty-Run17-R18-DPI-Service-Fix.zip Community-R18-Source.zip SHA256SUMS.txt package/Defender-Scan.txt package/ClamAV-Scan.txt package/community-panel.png package/community-timers.png package/morbid-installer.png package/morbid-intro.png --repo "$GITHUB_REPOSITORY" --target "$export_commit" --title "Morbid Kitty — Run17 R18 Installer" --notes-file community-r18/RELEASE-NOTES.md --prerelease
+
 
