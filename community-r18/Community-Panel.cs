@@ -183,7 +183,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   preview=isPreview;attachedPid=pid;
   statePath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"STFC-Community","Panel.json");
   state=PanelStorage.Load(statePath);
-  if(state==null)state=new PanelState();if(state.Alarms==null)state.Alarms=new List<AlarmState>();
+  if(state==null)state=new PanelState();if(!preview)state.Borderless=true;if(state.Alarms==null)state.Alarms=new List<AlarmState>();
   while(state.Alarms.Count<6)state.Alarms.Add(new AlarmState{Name="Timer "+(state.Alarms.Count+1)});
   Text="Morbid Kitty — STFC";Name="CommunityPanel";ClientSize=new Size(106,232);
   FormBorderStyle=FormBorderStyle.None;MaximizeBox=false;ShowInTaskbar=false;TopMost=true;
@@ -252,14 +252,12 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  void EndDrag(){if(!dragging)return;dragging=false;Capture=false;SavePlacement();}
  void InstallGapDrag(){Application.AddMessageFilter(this);filterInstalled=true;gapCallback=GapDrag;gapHook=SetWindowsHookEx(14,gapCallback,GetModuleHandle(null),0);}
  IntPtr GapDrag(int code,IntPtr message,IntPtr data){
-  if(code>=0&&message.ToInt32()==0x0204&&Visible&&!dragging){
-   var p=((MouseData)Marshal.PtrToStructure(data,typeof(MouseData))).Point;
-   if(RectangleToScreen(ClientRectangle).Contains(p)){
+  if(code>=0){int msg=message.ToInt32();var p=((MouseData)Marshal.PtrToStructure(data,typeof(MouseData))).Point;
+   if(dragging&&msg==0x0200){Location=new Point(dragOrigin.X+p.X-dragMouse.X,dragOrigin.Y+p.Y-dragMouse.Y);return new IntPtr(1);}
+   if(dragging&&msg==0x0205){dragging=false;Capture=false;BeginInvoke(new Action(SavePlacement));return new IntPtr(1);}
+   if(msg==0x0204&&Visible&&RectangleToScreen(ClientRectangle).Contains(p)){
     var owner=GetAncestor(WindowFromPoint(p),2);
-    if(owner==Handle||(bound!=null&&owner==bound.Window)){
-     // Existing child controls receive right-down through the normal message loop.
-     if(owner!=Handle){BeginDrag(p);return new IntPtr(1);}
-    }
+    if(owner==Handle||(bound!=null&&owner==bound.Window)){BeginDrag(p);return new IntPtr(1);}
    }
   }
   return CallNextHookEx(gapHook,code,message,data);
@@ -456,7 +454,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  }
  void UpdateUi(){
   if(closing)return;
-  if(dragging&&(GetAsyncKeyState(2)&0x8000)==0)EndDrag();
+  if(dragging&&gapHook==IntPtr.Zero&&(GetAsyncKeyState(2)&0x8000)==0)EndDrag();
   var now=DateTime.UtcNow;
   voiceProbe.Pump(now);store.Pump(now);PumpDesktop(now);
   if(!preview && now>=nextBind){nextBind=now.AddSeconds(1);RefreshGames();if(bound==null && (attachedPid>0||shuttingDown)){ExitPanel();return;}if(bound!=null)RequestDesktop(bound.Window,state.Borderless);}

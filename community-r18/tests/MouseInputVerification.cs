@@ -30,8 +30,25 @@ public static class MouseInputVerification {
  static void Click(Control c){trace.Clear();trace.Add("CLICK "+c.AccessibleName+" hwnd="+c.Handle+" parent="+c.Parent.Handle+" foreground="+GetForegroundWindow()+" selectable="+c.CanSelect+" capture="+GetCapture());var point=c.PointToScreen(new Point(c.Width/2,c.Height/2));Move(point);trace.Add("WindowFromPoint="+WindowFromPoint(point)+" hit="+SendMessage(c.Handle,0x84,IntPtr.Zero,new IntPtr((point.X&65535)|(point.Y<<16))));Require(GetAncestor(WindowFromPoint(point),2)==c.FindForm().Handle,"Hit-test blocked "+c.AccessibleName+" at "+point+" form="+c.FindForm().Bounds+" foreground="+GetForegroundWindow());MouseEvent(2);MouseEvent(4);}
  static object Call(CommunityPanel panel,string method,params object[] args){return typeof(CommunityPanel).GetMethod(method,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(panel,args);}
  static Form Timers(CommunityPanel panel){return (Form)typeof(CommunityPanel).GetField("timerWindow",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(panel);}
+ static void CrossProcessDrag(){
+  using(var host=Process.Start(new ProcessStartInfo(Assembly.GetExecutingAssembly().Location,"--mouse-host"){UseShellExecute=false}))
+  using(var panel=new CommunityPanel(0,false,true)){
+   try{
+    var watch=Stopwatch.StartNew();IntPtr window=IntPtr.Zero;
+    while(watch.ElapsedMilliseconds<5000){host.Refresh();window=host.MainWindowHandle;if(window!=IntPtr.Zero)break;Pump(20);}
+    Require(window!=IntPtr.Zero,"Independent game-window fixture did not start");
+    panel.Location=new Point(400,180);panel.Show();SetForegroundWindow(window);Pump();Require(GetForegroundWindow()==window,"Independent game fixture did not receive focus");
+    var clock=panel.Controls.OfType<Label>().Single();var origin=panel.Location;var point=clock.PointToScreen(new Point(clock.Width/2,clock.Height/2));
+    Move(point);MouseEvent(8);Move(new Point(point.X+180,point.Y+120));MouseEvent(16);Pump();
+    Require(panel.Location==new Point(origin.X+180,origin.Y+120),"Controller drag stopped outside its original bounds while another process held focus");
+    Require(GetForegroundWindow()==window&&!panel.Capture,"Cross-process drag stole focus or retained mouse capture");
+    Click(panel.Controls.OfType<Button>().Single(b=>b.AccessibleName=="Hide controller"));Require(!panel.Visible,"Controller did not hide with a different foreground process");
+   }finally{typeof(CommunityPanel).GetField("closing",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(panel,true);panel.Close();try{if(!host.HasExited){host.CloseMainWindow();Pump(100);if(!host.HasExited)host.Kill();}}catch{}}
+  }
+ }
  [STAThread] public static int Main(string[] args){
   DesktopDpi.Initialize();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+  if(args.Length==1&&args[0]=="--mouse-host"){Application.Run(new Form{Text="Independent game-window fixture",StartPosition=FormStartPosition.Manual,Bounds=new Rectangle(30,30,900,650)});return 0;}
   Application.AddMessageFilter(new TraceFilter());
   try{
    var directory=args.Length>0?args[0]:"input-evidence";Directory.CreateDirectory(directory);
@@ -59,7 +76,9 @@ public static class MouseInputVerification {
     }
     typeof(CommunityPanel).GetField("closing",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(panel,true);panel.Close();game.Close();
    }
-   File.WriteAllText(Path.Combine(directory,"mouse-input-validation.txt"),"PASS: Windows SendInput clicks on every controller button, timer editor close, controller hide, underlying game controls, dock-number shortcut, focus preservation and right-drag/capture release at 100%, 125% and 150% game UI scales. This is a Windows fixture, not a live STFC result.\r\n");return 0;
+   CrossProcessDrag();
+   File.WriteAllText(Path.Combine(directory,"mouse-input-validation.txt"),"PASS: Windows SendInput clicks on every controller button, timer editor close, controller hide, underlying game controls, dock-number shortcut, focus preservation and right-drag/capture release at 100%, 125% and 150% game UI scales; drag beyond original bounds and hide while an independent process holds focus. This is a Windows fixture, not a live STFC result.\r\n");return 0;
   }catch(Exception e){File.WriteAllText("mouse-input-error.txt",e.ToString()+"\r\n"+String.Join("\r\n",trace));Console.Error.WriteLine(e);return 1;}
  }
 }
+
