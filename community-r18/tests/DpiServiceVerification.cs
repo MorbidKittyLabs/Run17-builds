@@ -54,9 +54,29 @@ public static class DpiServiceVerification {
    }finally{release.Set();Pump(40);store.Dispose();}
   }
  }
+ static void VoiceRequestBeforeProbe(){
+  int pid=Process.GetCurrentProcess().Id;string prefix="Local\\STFC.Community.Voice.";
+  using(var request=new EventWaitHandle(false,EventResetMode.AutoReset,prefix+"Request."+pid))
+  using(var ready=new EventWaitHandle(false,EventResetMode.ManualReset,prefix+"Ready."+pid))
+  using(var failed=new EventWaitHandle(false,EventResetMode.ManualReset,prefix+"Failed."+pid))
+  using(var entered=new ManualResetEvent(false))using(var release=new ManualResetEvent(false))
+  using(var game=new Form{Text="Chat bridge fixture"})using(var panel=new CommunityPanel(0,false,true)){
+   game.Show();panel.Owner=game;panel.Show();game.Activate();Pump(40);
+   var type=typeof(CommunityPanel);var flags=BindingFlags.Instance|BindingFlags.NonPublic;
+   type.GetField("bound",flags).SetValue(panel,new GameChoice{Id=pid,Window=game.Handle,Directory=Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName)});
+   int probes=0;type.GetField("inspectVoiceOpen",flags).SetValue(panel,(Func<bool>)(()=>{Interlocked.Increment(ref probes);entered.Set();release.WaitOne();return true;}));
+   try{
+    type.GetMethod("VoiceTyping",flags).Invoke(panel,null);
+    Require(request.WaitOne(0)&&probes==0,"Opening game chat waited for Windows microphone inspection");
+    ready.Set();Pump(180);Require(entered.WaitOne(0),"Voice inspection did not run after native chat readiness");
+    type.GetMethod("ShowTimers",flags).Invoke(panel,null);Pump(40);
+    Require(((Form)type.GetField("timerWindow",flags).GetValue(panel)).Visible,"A blocked microphone provider prevented timer use");
+   }finally{type.GetField("closing",flags).SetValue(panel,true);panel.Close();release.Set();Pump(40);game.Close();}
+  }
+ }
  [STAThread] public static int Main(string[] args){
   DesktopDpi.Initialize();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
-  try{string output=args.Length==0?"ui-evidence":args[0];Directory.CreateDirectory(output);Console.WriteLine("Checking pixel typography");Fonts(output);Console.WriteLine("Checking blocked service providers");BlockedProviders();Console.WriteLine("Service checks complete");File.WriteAllText(Path.Combine(output,"dpi-service-validation.txt"),"PASS: pixel-font fit metrics at 96/144/192 DPI and three UI scales; MTA provider isolation; live UI heartbeat during a blocked call; bounded timeout and stale completion handling; Store open/close while process discovery is blocked. Font metrics do not substitute for live STFC or a real mixed-DPI monitor test.\r\n");return 0;}
+   try{string output=args.Length==0?"ui-evidence":args[0];Directory.CreateDirectory(output);Console.WriteLine("Checking pixel typography");Fonts(output);Console.WriteLine("Checking blocked service providers");BlockedProviders();Console.WriteLine("Checking immediate native chat request");VoiceRequestBeforeProbe();Console.WriteLine("Service checks complete");File.WriteAllText(Path.Combine(output,"dpi-service-validation.txt"),"PASS: pixel-font fit metrics at 96/144/192 DPI and three UI scales; MTA provider isolation; live UI heartbeat during a blocked call; bounded timeout and stale completion handling; Store open/close while process discovery is blocked; immediate native chat request and timer use while microphone inspection is blocked. Font metrics do not substitute for live STFC or a real mixed-DPI monitor test.\r\n");return 0;}
   catch(Exception e){Console.Error.WriteLine(e);File.WriteAllText("dpi-service-error.txt",e.ToString());return 1;}
  }
 }

@@ -149,6 +149,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  readonly GameDesktop desktop=new GameDesktop();
  readonly CommunityStore store=new CommunityStore();
  readonly UiWork<VoiceProbe> voiceProbe=new UiWork<VoiceProbe>();
+ Func<bool> inspectVoiceOpen=WindowsVoice.IsOpen;
  readonly UiWork<bool> desktopWork=new UiWork<bool>();
  IntPtr desktopWantedWindow;bool desktopWantedBorderless;int desktopRequest,desktopCompleted;
  readonly SummonHandle summon=new SummonHandle();
@@ -343,26 +344,20 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  void DisposeVoice(){if(voiceReady!=null)voiceReady.Dispose();if(voiceFailed!=null)voiceFailed.Dispose();voiceReady=voiceFailed=null;if(microphone!=null)microphone.Enabled=true;}
  void VoiceTyping(){
   if(voiceReady!=null||voiceProbe.Busy)return;var g=RequireGame();if(!FocusGame(g))throw new InvalidOperationException("Click STFC first, then try again.");
-  microphone.Enabled=false;bool wantedClose=voiceSession;
-  voiceProbe.Start(()=>{
-   bool open=WindowsVoice.IsOpen(),toggle=false;bool close=wantedClose||open;
-   if(close)WindowsVoice.DismissOrNeedsToggle(out toggle);
-   return new VoiceProbe{Open=open,Closing=close,NeedsToggle=toggle};
-  },TimeSpan.FromSeconds(3),(result,error)=>{
-   if(error!=null){microphone.Enabled=true;Status(error.Message,true);return;}
-   try{
-    if(bound==null||bound.Id!=g.Id||!FocusGame(g)){microphone.Enabled=true;return;}
-    voiceClosing=result.Closing;if(voiceClosing&&result.NeedsToggle)ToggleWindowsVoice();
-    string prefix="Local\\STFC.Community.Voice.";
-    voiceReady=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"Closed.":"Ready.")+g.Id);voiceFailed=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"CloseFailed.":"Failed.")+g.Id);voiceReady.Reset();voiceFailed.Reset();
-    using(var request=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"Close.":"Request.")+g.Id))request.Set();voiceDeadline=DateTime.UtcNow.AddSeconds(4);
-   }catch{DisposeVoice();Status("Chat voice request is unavailable for this game process.",true);}
-  });
+  microphone.Enabled=false;voiceClosing=voiceSession;
+  try{
+   string prefix="Local\\STFC.Community.Voice.";
+   voiceReady=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"Closed.":"Ready.")+g.Id);voiceFailed=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"CloseFailed.":"Failed.")+g.Id);voiceReady.Reset();voiceFailed.Reset();
+   using(var request=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"Close.":"Request.")+g.Id))request.Set();voiceDeadline=DateTime.UtcNow.AddSeconds(4);
+   if(voiceClosing)voiceProbe.Start(()=>{
+    bool toggle=false;WindowsVoice.DismissOrNeedsToggle(out toggle);return new VoiceProbe{NeedsToggle=toggle};
+   },TimeSpan.FromSeconds(3),(result,error)=>{if(error!=null){Status(error.Message,true);return;}if(result.NeedsToggle&&bound!=null&&bound.Id==g.Id&&FocusGame(g))ToggleWindowsVoice();});
+  }catch{DisposeVoice();throw new InvalidOperationException("Chat voice request is unavailable for this game process.");}
  }
  void FinishVoiceOpen(){
   var g=Selected();if(g==null||GetForegroundWindow()!=g.Window){Status("Return to STFC and press the mic button again",true);return;}
   microphone.Enabled=false;
-  voiceProbe.Start(()=>new VoiceProbe{Open=WindowsVoice.IsOpen()},TimeSpan.FromSeconds(3),(result,error)=>{
+  voiceProbe.Start(()=>new VoiceProbe{Open=inspectVoiceOpen()},TimeSpan.FromSeconds(3),(result,error)=>{
    microphone.Enabled=true;if(error!=null){Status(error.Message,true);return;}
    if(bound==null||bound.Id!=g.Id||GetForegroundWindow()!=g.Window)return;
    if(!result.Open)ToggleWindowsVoice();voiceSession=true;
