@@ -24,14 +24,18 @@ jobs:
           Copy-Item (Join-Path $root 'assets/*') $root
           & $csc /nologo /target:winexe /codepage:65001 /platform:x64 /optimize+ @refs ('/out:'+(Join-Path $root 'Community-Panel.exe')) (Join-Path $root 'Community-Common.cs') (Join-Path $root 'Community-Panel.cs') (Join-Path $root 'Community-Desktop.cs') (Join-Path $root 'Community-Voice.cs') (Join-Path $root 'UiWork.cs') /r:System.Management.dll ('/r:'+(Join-Path $wpf 'UIAutomationClient.dll')) ('/r:'+(Join-Path $wpf 'UIAutomationTypes.dll')) ('/r:'+(Join-Path $wpf 'WindowsBase.dll'))
           if ($LASTEXITCODE -ne 0) { throw 'Panel compilation failed' }
-          $proc=Start-Process (Join-Path $root 'Community-Panel.exe') -PassThru -Wait -ArgumentList @('--verify-ui','ui-evidence')
+          $proc=Start-Process (Join-Path $root 'Community-Panel.exe') -PassThru -ArgumentList @('--verify-ui','ui-evidence')
+          if (-not $proc.WaitForExit(45000)) { Stop-Process -Id $proc.Id -Force; Get-Content ui-evidence/*progress.txt,desktop-progress.txt -ErrorAction SilentlyContinue; throw 'UI render check timed out' }
           if ($proc.ExitCode -ne 0) { if (Test-Path panel-error.txt) { Get-Content panel-error.txt }; throw 'UI render check failed' }
           foreach ($name in @('MouseInputVerification','DpiServiceVerification')) {
             $exe=Join-Path $root ($name+'.exe')
             & $csc /nologo /target:exe /codepage:65001 /platform:x64 @refs ('/r:'+(Join-Path $root 'Community-Panel.exe')) ('/out:'+$exe) (Join-Path $root ('tests/'+$name+'.cs'))
             if ($LASTEXITCODE -ne 0) { throw ($name+' compilation failed') }
-            & $exe ui-evidence
-            if ($LASTEXITCODE -ne 0) { Get-Content *-error.txt; throw ($name+' failed') }
+            $stdout=Join-Path $env:RUNNER_TEMP ($name+'.out'); $stderr=Join-Path $env:RUNNER_TEMP ($name+'.err')
+            $check=Start-Process $exe -PassThru -ArgumentList @('ui-evidence') -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            if (-not $check.WaitForExit(60000)) { Stop-Process -Id $check.Id -Force; Get-Content $stdout,$stderr; throw ($name+' timed out') }
+            Get-Content $stdout,$stderr
+            if ($check.ExitCode -ne 0) { Get-Content *-error.txt; throw ($name+' failed') }
           }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -40,3 +44,4 @@ jobs:
           path: |
             ui-evidence/
             *-error.txt
+            desktop-progress.txt

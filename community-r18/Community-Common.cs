@@ -18,7 +18,12 @@ public static class DesktopDpi {
  public static void Initialize(){try{if(SetProcessDpiAwarenessContext(new IntPtr(-4)))return;}catch(EntryPointNotFoundException){}try{if(SetProcessDpiAwareness(2)==0)return;}catch(DllNotFoundException){}catch(EntryPointNotFoundException){}SetProcessDPIAware();}
 }
 public static class PixelFonts {
- public static Font Create(string family,float designPoints,FontStyle style=FontStyle.Regular){return new Font(family,designPoints*4f/3f,style,GraphicsUnit.Pixel);}
+ static readonly Dictionary<string,Font> fonts=new Dictionary<string,Font>();
+ static PixelFonts(){Application.ApplicationExit+=(o,e)=>{foreach(var font in fonts.Values)font.Dispose();fonts.Clear();};}
+ public static Font Create(string family,float designPoints,FontStyle style=FontStyle.Regular){
+  float pixels=(float)Math.Round(designPoints*4f/3f,2);string key=family+"/"+pixels.ToString(System.Globalization.CultureInfo.InvariantCulture)+"/"+style;
+  Font font;if(!fonts.TryGetValue(key,out font)){font=new Font(family,pixels,style,GraphicsUnit.Pixel);fonts.Add(key,font);}return font;
+ }
 }
 public static class BeveledFace {
  public static GraphicsPath Shape(Rectangle bounds,int radius){return Shape(bounds,radius,true,true);}

@@ -122,10 +122,10 @@ public sealed class DockShortcut:Form {
  protected override bool ShowWithoutActivation{get{return true;}}
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x08000000;return p;}}
  public void Place(Rectangle dock,float scale){
-  int size=Math.Max(14,Math.Min((int)Math.Round(22*scale),Math.Min(dock.Width,dock.Height)/2));ClientSize=new Size(size,size);
-  Location=new Point(dock.Left+2,Math.Max(dock.Top,dock.Bottom-size-(int)Math.Round(14*scale)));if(numberFont==null||numberFont.Size!=Math.Max(7,9*scale)){var old=numberFont;numberFont=PixelFonts.Create("Tahoma",Math.Max(7,9*scale),FontStyle.Bold);button.Font=numberFont;if(old!=null)old.Dispose();}
+  int size=Math.Max(20,Math.Min((int)Math.Round(22*scale),Math.Min(dock.Width,dock.Height)/2));ClientSize=new Size(size,size);
+  Location=new Point(dock.Left+2,Math.Max(dock.Top,dock.Bottom-size-(int)Math.Round(14*scale)));if(numberFont==null||Math.Abs(numberFont.Size-Math.Round(Math.Max(7,9*scale)*4f/3f,2))>.01){numberFont=PixelFonts.Create("Tahoma",Math.Max(7,9*scale),FontStyle.Bold);button.Font=numberFont;}
  }
- protected override void Dispose(bool disposing){base.Dispose(disposing);if(disposing&&numberFont!=null){numberFont.Dispose();numberFont=null;}}
+ protected override void Dispose(bool disposing){base.Dispose(disposing);if(disposing&&numberFont!=null){numberFont=null;}}
 }
 
 public sealed class CommunityPanel:Form,IMessageFilter {
@@ -155,7 +155,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  readonly DockShortcut[] dockShortcuts=new DockShortcut[8];
  readonly Dictionary<Control,Rectangle> controllerBounds=new Dictionary<Control,Rectangle>();
  const float ControllerSize=2f/3f;
- float uiScale=1;Font timerFont;
+ float uiScale=1,timerScale=1;Font timerFont;
  Rectangle placedGame;Size placedSize;bool placementDirty=true;
  EventWaitHandle wake;
  bool restoreHotkey,desktopHotkey;
@@ -219,16 +219,15 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  void ToggleDesktop(){state.Borderless=!state.Borderless;RequestDesktop(bound==null?IntPtr.Zero:bound.Window,state.Borderless);dirty=true;}
  void LayoutController(float scale){
   uiScale=scale;placementDirty=true;
-  var priorTimerFont=timerFont;timerFont=PixelFonts.Create("Tahoma",9*scale);
+  timerScale=Math.Max(1f,scale);timerFont=PixelFonts.Create("Tahoma",9*timerScale);
   if(timerWindow!=null)timerWindow.Font=timerFont;
-  foreach(var notice in timerNotices.Values)notice.Fit("Timer finished",600,scale,timerFont);
-  if(priorTimerFont!=null)priorTimerFont.Dispose();
+  foreach(var notice in timerNotices.Values)notice.Fit("Timer finished",600,timerScale,timerFont);
   scale=Math.Max(1f,scale*ControllerSize);
   SuspendLayout();
   foreach(var pair in controllerBounds){var r=pair.Value;pair.Key.Bounds=new Rectangle((int)Math.Round(r.X*scale),(int)Math.Round(r.Y*scale),Math.Max(1,(int)Math.Round(r.Width*scale)),Math.Max(1,(int)Math.Round(r.Height*scale)));}
-  var oldFont=Font;Font=PixelFonts.Create("Tahoma",9*scale);if(oldFont!=SystemFonts.DefaultFont)oldFont.Dispose();
-  var oldClock=clock.Font;clock.Font=PixelFonts.Create("Tahoma",10*scale,FontStyle.Bold);oldClock.Dispose();
-  foreach(var button in new[]{microphone,save}){var old=button.Font;button.Font=PixelFonts.Create("Segoe MDL2 Assets",11*scale);old.Dispose();}
+  Font=PixelFonts.Create("Tahoma",9*scale);
+  clock.Font=PixelFonts.Create("Tahoma",10*scale,FontStyle.Bold);
+  foreach(var button in new[]{microphone,save}){button.Font=PixelFonts.Create("Segoe MDL2 Assets",11*scale);}
   ClientSize=new Size((int)Math.Round(106*scale),(int)Math.Round(150*scale));
   ResumeLayout();
   using(var region=new Region()){
@@ -409,10 +408,10 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   }
   var game=GameRectangle();uint front;GetWindowThreadProcessId(GetForegroundWindow(),out front);
   bool show=bound!=null&&!game.IsEmpty&&!IsIconic(bound.Window)&&(front==bound.Id||front==Process.GetCurrentProcess().Id||(voiceSession&&WindowsVoice.Owns(front))||store.Owns(GetForegroundWindow()));
-  var items=timerNotices.OrderBy(pair=>pair.Key).ToArray();int height=Math.Max(14,(int)Math.Round(28*uiScale)),gap=Math.Max(3,(int)Math.Round(6*uiScale));int stackHeight=items.Length*height+Math.Max(0,items.Length-1)*gap;
+  var items=timerNotices.OrderBy(pair=>pair.Key).ToArray();int height=Math.Max(14,(int)Math.Round(28*timerScale)),gap=Math.Max(3,(int)Math.Round(6*timerScale));int stackHeight=items.Length*height+Math.Max(0,items.Length-1)*gap;
   for(int row=0;row<items.Length;row++){
    var item=items[row];if(!show){item.Value.Hide();continue;}
-   item.Value.Fit(state.Alarms[item.Key].Name,game.Width-32,uiScale,timerFont);item.Value.Location=new Point(game.Left+(game.Width-item.Value.Width)/2,game.Top+(game.Height-stackHeight)/2+row*(height+gap));
+   item.Value.Fit(state.Alarms[item.Key].Name,game.Width-32,timerScale,timerFont);item.Value.Location=new Point(game.Left+(game.Width-item.Value.Width)/2,game.Top+(game.Height-stackHeight)/2+row*(height+gap));
    if(!item.Value.Visible)item.Value.Show();
   }
  }
@@ -440,7 +439,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   timerWindow.FormClosed+=(o,e)=>{Persist();countdowns.Clear();startButtons.Clear();timerBounds.Clear();timerWindow=null;};timerWindow.Show(this);timerWindow.Activate();UpdateUi();
  }
  void ScaleTimerWindow(float scale){
-  if(timerWindow==null)return;
+  if(timerWindow==null)return;scale=timerScale;
   timerWindow.SuspendLayout();
   foreach(var pair in timerBounds){var r=pair.Value;pair.Key.Bounds=new Rectangle((int)Math.Round(r.X*scale),(int)Math.Round(r.Y*scale),Math.Max(1,(int)Math.Round(r.Width*scale)),Math.Max(1,(int)Math.Round(r.Height*scale)));}
   timerWindow.Font=timerFont;timerWindow.ClientSize=new Size((int)Math.Round(524*scale),(int)Math.Round(234*scale));timerWindow.ResumeLayout();
@@ -498,18 +497,18 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   if(!new PanelState().Borderless)throw new Exception("Old panel settings must default to borderless");
   if(state.Alarms.Count<6)throw new Exception("Six timers missing");
   var a=new AlarmState{Name="Days test",DurationSeconds=2*86400+3*3600+4*60+5};ResetAlarm(a);if(a.Remaining!=183845)throw new Exception("Day/hour/minute/second duration failed");
-  GameDesktop.Verify();
+  File.AppendAllText("desktop-progress.txt","before desktop verify\r\n");GameDesktop.Verify();File.AppendAllText("desktop-progress.txt","after desktop verify\r\n");
   if(CommunityStore.ProfileMatches("browser.exe --user-data-dir=\"C:\\other\"", "C:\\owned"))throw new Exception("Store close could target an unrelated browser");
  }
  public void WriteUiEvidence(string directory){
-  Directory.CreateDirectory(directory);Show();Application.DoEvents();
+  Directory.CreateDirectory(directory);File.AppendAllText(Path.Combine(directory,"panel-progress.txt"),"show panel\r\n");Show();Application.DoEvents();
   if(Width>=Height)throw new Exception("Panel must be vertical: "+Size+" client="+ClientSize+" scale="+uiScale);
   if(!Controls.OfType<Button>().Any(b=>b.Text=="Diagnostics"))throw new Exception("Diagnostics button missing");
   foreach(Control c in Controls){if(!c.Visible)continue;if(!ClientRectangle.Contains(c.Bounds))throw new Exception("Control clipped: "+c.Text);}
   var buttons=Controls.OfType<Button>().ToArray();
   for(int i=0;i<buttons.Length;i++)for(int j=i+1;j<buttons.Length;j++)if(buttons[i].Bounds.IntersectsWith(buttons[j].Bounds))throw new Exception("Buttons overlap");
   using(var bmp=new Bitmap(Width,Height)){DrawToBitmap(bmp,new Rectangle(0,0,Width,Height));bmp.MakeTransparent(TransparencyKey);bmp.Save(Path.Combine(directory,"community-panel.png"));}
-  VerifyInteraction();ShowTimers();Application.DoEvents();
+  File.AppendAllText(Path.Combine(directory,"panel-progress.txt"),"verify interactions\r\n");VerifyInteraction();File.AppendAllText(Path.Combine(directory,"panel-progress.txt"),"show timers\r\n");ShowTimers();Application.DoEvents();
   using(var bmp=new Bitmap(timerWindow.Width,timerWindow.Height)){timerWindow.DrawToBitmap(bmp,new Rectangle(0,0,timerWindow.Width,timerWindow.Height));bmp.Save(Path.Combine(directory,"community-timers.png"));}
  }
  [STAThread] public static int Main(string[] args){

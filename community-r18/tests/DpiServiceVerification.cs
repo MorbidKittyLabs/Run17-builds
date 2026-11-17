@@ -56,7 +56,7 @@ public static class DpiServiceVerification {
  }
  [STAThread] public static int Main(string[] args){
   DesktopDpi.Initialize();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
-  try{string output=args.Length==0?"ui-evidence":args[0];Directory.CreateDirectory(output);Fonts(output);BlockedProviders();File.WriteAllText(Path.Combine(output,"dpi-service-validation.txt"),"PASS: pixel-font fit metrics at 96/144/192 DPI and three UI scales; MTA provider isolation; live UI heartbeat during a blocked call; bounded timeout and stale completion handling; Store open/close while process discovery is blocked. Font metrics do not substitute for live STFC or a real mixed-DPI monitor test.\r\n");return 0;}
+  try{string output=args.Length==0?"ui-evidence":args[0];Directory.CreateDirectory(output);Console.WriteLine("Checking pixel typography");Fonts(output);Console.WriteLine("Checking blocked service providers");BlockedProviders();Console.WriteLine("Service checks complete");File.WriteAllText(Path.Combine(output,"dpi-service-validation.txt"),"PASS: pixel-font fit metrics at 96/144/192 DPI and three UI scales; MTA provider isolation; live UI heartbeat during a blocked call; bounded timeout and stale completion handling; Store open/close while process discovery is blocked. Font metrics do not substitute for live STFC or a real mixed-DPI monitor test.\r\n");return 0;}
   catch(Exception e){Console.Error.WriteLine(e);File.WriteAllText("dpi-service-error.txt",e.ToString());return 1;}
  }
 }
