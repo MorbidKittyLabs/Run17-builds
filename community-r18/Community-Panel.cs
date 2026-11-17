@@ -160,7 +160,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  Rectangle placedGame;Size placedSize;bool placementDirty=true;
  EventWaitHandle wake;
  bool restoreHotkey,desktopHotkey;
-  int pendingShip;uint lastShipSequence;DateTime shipDeadline;
+  int pendingShip;uint lastShipSequence;DateTime shipDeadline;Action pendingFocusAction;GameChoice pendingFocusGame;DateTime pendingFocusDeadline;
  [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h,int id,uint modifiers,uint key);
  [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h,int id);
  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h,uint message,IntPtr w,IntPtr l);
@@ -278,10 +278,10 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   BeginDrag(Cursor.Position);return true;
  }
  protected override void WndProc(ref Message m){if(m.Msg==0x0021){m.Result=new IntPtr(3);return;}if(m.Msg==0x0312 && m.WParam.ToInt32()==814){ShowMenu();return;}if(m.Msg==0x0312&&m.WParam.ToInt32()==815){ToggleDesktop();return;}base.WndProc(ref m);}
- void HideMenu(){dragging=false;Capture=false;hiddenByUser=true;Hide();if(timerWindow!=null)timerWindow.Close();}
+ void HideMenu(){pendingFocusAction=null;dragging=false;Capture=false;hiddenByUser=true;Hide();if(timerWindow!=null)timerWindow.Close();}
  void ShowMenu(){hiddenByUser=false;PlaceForGame();if(preview||HudVisible())Show();}
  void ExitPanel(){closing=true;Close();Application.ExitThread();}
- void ShutdownGame(){var game=RequireGame();store.Close();shuttingDown=true;PostMessage(game.Window,0x0010,IntPtr.Zero,IntPtr.Zero);}
+ void ShutdownGame(){pendingFocusAction=null;var game=RequireGame();store.Close();shuttingDown=true;PostMessage(game.Window,0x0010,IntPtr.Zero,IntPtr.Zero);}
  GameButton Make(string text,int x,int y,int width,int height,string tip,Action action) {
   var b=new GameButton{PreserveGameFocus=true,Text=text,Bounds=new Rectangle(x,y,width,height),TopColor=Color.FromArgb(20,130,185),BottomColor=Color.FromArgb(5,69,112)};
   b.FlatAppearance.BorderColor=Color.FromArgb(158,217,236);b.Click+=(s,e)=>{try{if(preview&&text=="Store")return;action();}catch(Exception ex){Status(ex.Message,true);}};
@@ -334,14 +334,28 @@ public sealed class CommunityPanel:Form,IMessageFilter {
  }
  bool FocusGame(GameChoice g){if(IsIconic(g.Window))ShowWindow(g.Window,9);SetForegroundWindow(g.Window);return GetForegroundWindow()==g.Window;}
  static void Key(byte key,bool up){keybd_event(key,0,up?2u:0u,UIntPtr.Zero);}
+ void WithGameFocus(GameChoice game,Action action){
+  pendingFocusAction=null;
+  if(FocusGame(game)){action();return;}
+  pendingFocusGame=game;pendingFocusAction=action;pendingFocusDeadline=DateTime.UtcNow.AddSeconds(1);
+ }
+ void PumpGameFocus(DateTime now){
+  if(pendingFocusAction==null)return;
+  if(bound==null||bound.Id!=pendingFocusGame.Id||now>=pendingFocusDeadline){pendingFocusAction=null;Status("STFC did not receive focus. Click the game and try once more.",true);return;}
+  if(GetForegroundWindow()!=pendingFocusGame.Window)return;
+  var action=pendingFocusAction;pendingFocusAction=null;try{action();}catch(Exception e){Status(e.Message,true);}
+ }
  void SendShip(int ship){
-  if(ship<1||ship>8)return;var g=RequireGame();if(!FocusGame(g))throw new InvalidOperationException("Click STFC first, then try again.");
-  try{using(var request=EventWaitHandle.OpenExisting("Local\\STFC.Community.Ship."+g.Id+"."+ship))request.Set();pendingShip=ship;shipDeadline=DateTime.UtcNow.AddSeconds(3);}
-  catch(WaitHandleCannotBeOpenedException){throw new InvalidOperationException("Install the matching controller update and restart STFC to enable ship selection.");}
+  if(ship<1||ship>8)return;var g=RequireGame();WithGameFocus(g,()=>{
+   try{using(var request=EventWaitHandle.OpenExisting("Local\\STFC.Community.Ship."+g.Id+"."+ship))request.Set();pendingShip=ship;shipDeadline=DateTime.UtcNow.AddSeconds(3);}
+   catch(WaitHandleCannotBeOpenedException){throw new InvalidOperationException("Install the matching controller update and restart STFC to enable ship selection.");}
+  });
  }
  void DisposeVoice(){if(voiceReady!=null)voiceReady.Dispose();if(voiceFailed!=null)voiceFailed.Dispose();voiceReady=voiceFailed=null;if(microphone!=null)microphone.Enabled=true;}
  void VoiceTyping(){
-  if(voiceReady!=null||voiceProbe.Busy)return;var g=RequireGame();if(!FocusGame(g))throw new InvalidOperationException("Click STFC first, then try again.");
+  if(voiceReady!=null||voiceProbe.Busy)return;var g=RequireGame();WithGameFocus(g,()=>BeginVoiceRequest(g));
+ }
+ void BeginVoiceRequest(GameChoice g){
   microphone.Enabled=false;voiceClosing=voiceSession;
   try{
    string prefix="Local\\STFC.Community.Voice.";
@@ -349,7 +363,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
    using(var request=EventWaitHandle.OpenExisting(prefix+(voiceClosing?"Close.":"Request.")+g.Id))request.Set();voiceDeadline=DateTime.UtcNow.AddSeconds(4);
    if(voiceClosing)voiceProbe.Start(()=>{
     bool toggle=false;WindowsVoice.DismissOrNeedsToggle(out toggle);return new VoiceProbe{NeedsToggle=toggle};
-   },TimeSpan.FromSeconds(3),(result,error)=>{if(error!=null){Status(error.Message,true);return;}if(result.NeedsToggle&&bound!=null&&bound.Id==g.Id&&FocusGame(g))ToggleWindowsVoice();});
+   },TimeSpan.FromSeconds(3),(result,error)=>{if(error!=null){Status(error.Message,true);return;}if(result.NeedsToggle&&bound!=null&&bound.Id==g.Id)WithGameFocus(g,ToggleWindowsVoice);});
   }catch{DisposeVoice();throw new InvalidOperationException("Chat voice request is unavailable for this game process.");}
  }
  void FinishVoiceOpen(){
@@ -456,7 +470,7 @@ public sealed class CommunityPanel:Form,IMessageFilter {
   if(closing)return;
   if(dragging&&gapHook==IntPtr.Zero&&(GetAsyncKeyState(2)&0x8000)==0)EndDrag();
   var now=DateTime.UtcNow;
-  voiceProbe.Pump(now);store.Pump(now);PumpDesktop(now);
+  voiceProbe.Pump(now);store.Pump(now);PumpDesktop(now);PumpGameFocus(now);
   if(!preview && now>=nextBind){nextBind=now.AddSeconds(1);RefreshGames();if(bound==null && (attachedPid>0||shuttingDown)){ExitPanel();return;}if(bound!=null)RequestDesktop(bound.Window,state.Borderless);}
   if(!preview){
    UpdateRestoreHotkey();

@@ -4,10 +4,14 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 
 public static class DpiServiceVerification {
+ [DllImport("user32.dll")] static extern bool SetCursorPos(int x,int y);
+ [DllImport("user32.dll")] static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
+ [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
  static void Require(bool ok,string message){if(!ok)throw new Exception(message);}
  static void Pump(int ms){var watch=Stopwatch.StartNew();while(watch.ElapsedMilliseconds<ms){Application.DoEvents();Thread.Sleep(5);}}
  static void Fonts(string output){
@@ -62,6 +66,8 @@ public static class DpiServiceVerification {
   using(var entered=new ManualResetEvent(false))using(var release=new ManualResetEvent(false))
   using(var game=new Form{Text="Chat bridge fixture"})using(var panel=new CommunityPanel(0,false,true)){
    game.Show();panel.Owner=game;panel.Show();game.Activate();Pump(40);
+   var click=game.PointToScreen(new Point(game.ClientSize.Width-20,game.ClientSize.Height-20));SetCursorPos(click.X,click.Y);mouse_event(2,0,0,0,UIntPtr.Zero);mouse_event(4,0,0,0,UIntPtr.Zero);Pump(80);
+   Require(GetForegroundWindow()==game.Handle,"Chat fixture could not acquire a user-input foreground window");
    var type=typeof(CommunityPanel);var flags=BindingFlags.Instance|BindingFlags.NonPublic;
    type.GetField("bound",flags).SetValue(panel,new GameChoice{Id=pid,Window=game.Handle,Directory=Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName)});
    int probes=0;type.GetField("inspectVoiceOpen",flags).SetValue(panel,(Func<bool>)(()=>{Interlocked.Increment(ref probes);entered.Set();release.WaitOne();return true;}));
