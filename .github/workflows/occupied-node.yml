@@ -13,6 +13,9 @@ jobs:
     runs-on: windows-2025-vs2026
     timeout-minutes: 100
     steps:
+      - name: Keep patch and source line endings consistent
+        shell: pwsh
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
         with:
