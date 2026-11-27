@@ -1,0 +1,101 @@
+name: Occupied node isolated Windows test
+on:
+  push:
+    paths: ['occupied-node/**', '.github/workflows/occupied-node.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: occupied-node-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: STFC-Mod/mod
+          ref: 8b7013e4643e85b4fe08e849d5f211d594b88c8e
+          path: source
+          show-progress: false
+      - name: Apply only the isolated inspection patch
+        working-directory: source
+        shell: pwsh
+        run: |
+          git apply --check ../occupied-node/inspection.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Patch does not apply to the pinned upstream base' }
+          git apply ../occupied-node/inspection.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Patch application failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace errors' }
+          $forbidden = @('hostile_target_audit.h', 'pursuit_monitor.inc', 'tactical_policy.h', 'Community-Panel.cs')
+          foreach ($name in $forbidden) {
+            if (Get-ChildItem -Recurse -File mods/src | Where-Object Name -eq $name) { throw "Private dependency included: $name" }
+          }
+      - uses: xmake-io/github-action-setup-xmake@v1.2.5
+        with:
+          xmake-version: '3.1.1'
+      - id: cache-path
+        working-directory: source
+        shell: pwsh
+        run: |
+          $dir=(xmake l -c 'import("core.package.package"); print(package.installdir())').Trim()
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache/restore@v4
+        id: packages
+        with:
+          path: ${{ steps.cache-path.outputs.dir }}
+          key: occupied-node-windows-xmake-3.1.1-${{ hashFiles('source/xmake/dependencies/*.lua', 'source/xmake-requires.lock', 'source/xmake-packages/**') }}
+      - name: Configure pinned dependencies and test provenance
+        working-directory: source
+        shell: pwsh
+        run: |
+          python scripts/stamp-version-hash.py '${{ github.sha }}'
+          xmake f -p windows -a x64 -m release -y --stfc_source_state_id=occupied-node:${{ github.sha }} --stfc_base_commit=8b7013e4643e85b4fe08e849d5f211d594b88c8e --stfc_build_invocation_id=github:${{ github.run_id }}:${{ github.run_attempt }}:windows --stfc_build_channel=occupied-node-test
+          if ($LASTEXITCODE -ne 0) { throw 'XMake configure failed' }
+      - uses: actions/cache/save@v4
+        if: steps.packages.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.cache-path.outputs.dir }}
+          key: ${{ steps.packages.outputs.cache-primary-key }}
+      - name: Run identity and binding regression tests
+        working-directory: source
+        shell: pwsh
+        run: |
+          foreach ($target in @('occupied-node-cycle-tests', 'il2cpp-runtime-tests', 'il2cpp-checked-tests')) {
+            xmake build -y $target
+            if ($LASTEXITCODE -ne 0) { throw "Build failed: $target" }
+            xmake run $target
+            if ($LASTEXITCODE -ne 0) { throw "Test failed: $target" }
+          }
+      - name: Compile complete Windows mod
+        working-directory: source
+        shell: pwsh
+        run: |
+          xmake build -y -v stfc-community-mod
+          if ($LASTEXITCODE -ne 0) { throw 'Full Windows DLL compilation failed' }
+      - name: Compile click-to-install package
+        shell: pwsh
+        run: |
+          $dlls=@(Get-ChildItem source/build/windows/x64/release -Filter 'stfc-community-mod.dll' -Recurse)
+          if ($dlls.Count -ne 1) { throw "Expected exactly one compiled DLL, found $($dlls.Count)" }
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item $dlls[0].FullName package/version.dll
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:package/OccupiedNode-Test-Setup.exe /resource:package/version.dll,OccupiedNode.version.dll occupied-node/Setup.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Setup compilation failed' }
+          foreach ($argument in @('--verify-payload', '--self-test')) {
+            $process=Start-Process package/OccupiedNode-Test-Setup.exe -ArgumentList $argument -PassThru -Wait
+            if ($process.ExitCode -ne 0) { throw "Setup validation failed: $argument" }
+          }
+          Copy-Item occupied-node/README.txt,occupied-node/IMPLEMENTATION.md,occupied-node/inspection.patch package/
+          @('Build commit: ${{ github.sha }}','Upstream base: 8b7013e4643e85b4fe08e849d5f211d594b88c8e','Live game test: pending user acceptance') | Set-Content package/BUILD.txt
+          Get-ChildItem package -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content package/SHA256SUMS.txt
+          Compress-Archive package/* OccupiedNode-Isolated-Test.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OccupiedNode-Isolated-Test
+          path: OccupiedNode-Isolated-Test.zip
+          if-no-files-found: error

@@ -1,0 +1,525 @@
+diff --git a/docs/occupied-node-inspection.md b/docs/occupied-node-inspection.md
+new file mode 100644
+index 0000000..868bb6e
+--- /dev/null
++++ b/docs/occupied-node-inspection.md
+@@ -0,0 +1,58 @@
++# Occupied mining-node inspection
++
++Base: `8b7013e4643e85b4fe08e849d5f211d594b88c8e`.
++
++ActionView on another player's occupied mining node selects its current occupant,
++opens native rewards, hides rewards on the second press to expose strength, and
++selects the original mining POI on the third press. Restoration is confirmed only
++when that node's native viewer is visible. No Scan call or section change is used.
++Only numeric node/fleet IDs and galaxy/system/instance identity survive a frame.
++A selection or section change cancels tracking. Binding has a two-second deadline.
++Restoration failure is logged and consumes the key without toggling back to loot.
++
++Native MineClicked/OnEngageButtonClicked/OnScanButtonClicked paths are untouched.
++Saved inspection IDs are never passed to an attack or course-setting method.
++The third press resolves the current node POI again; the next inspection resolves
++its occupant again, so a replacement is never substituted into a saved attack.
++No private controller, automation, repair or hostile-selection code is included.
++
++## Metadata evidence
++
++Recovered October 24 files, inspected directly with Il2CppDumper at metadata
++version 31 (CodeRegistration `0x184c7dbc0`, MetadataRegistration `0x1853999e0`).
++
++- global-metadata.dat SHA256: `ab0ccdc3e9e09e59d16a13431e2a0722255a71d5ff373cc09d95a47cd130ca04`
++- GameAssembly.dll SHA256: `a5df6314bd78f15892a232a44e77cdcf2e3d20e9a6192f99120c0f3e52632274`
++- NavigationInteractionUIContext has public reference field `Poi` of type
++  `Digit.Prime.Navigation.POI`; POI has `Int64 get_ID()` and `NodeAddress get_Address()`.
++- NavigationManager has instance `Boolean CanSelectPoi(Int64)` at RVA `0x12f77b0`
++  and `Boolean SelectPoi(Int64)` at RVA `0x12f78b0`. Disassembly confirms both call
++  `POI.Get(Int64)` (`0x13170f0`); SelectPoi forwards the live POI to native selection.
++- MiningObjectViewerWidget.ScanButtonClickedEventHandler (`0x10ed060`) jumps to
++  SetPoiToSelect (`0x10ed070`), which reads inherited widget context and its Poi
++  and copies Poi.ID for native return selection. The feature does not invoke it.
++- FleetDeployedData has `Int64 get_ID()` (`0x19ea420`).
++- NavigationViewData has `NodeAddress get_ViewingAddress()`; NodeAddress exposes
++  Galaxy/System (Int64) and Instance (Int32).
++
++Runtime bindings verify full method/field types and handle managed exceptions.
++Offsets/RVAs above document the inspected client and are never used as bindings.
++Compatibility with newer game clients still requires the live test below.
++
++`show_info_pending` is already declared at hotkeys.cc:76 in this exact base and
++its existing native rewards path remains intact. This feature uses its own
++bounded pending selection and does not depend on that variable.
++
++## Validation
++
++Host regression fixture: `tests/occupied_node_cycle.cc`, built with C++23,
++-Wall -Wextra -Werror, AddressSanitizer and UndefinedBehaviorSanitizer. Leak
++checking is disabled in the container because its ptrace setup prevents LSAN.
++Windows full compilation, checked bindings and installer checks are recorded by
++the isolated build workflow. A successful compile is not a live game test.
++
++Live acceptance: one account, node -> loot -> strength -> the same node; repeat.
++Then empty node; occupant leaves/replaced; unrelated selection; system and server
++instance changes; native Scan and Attack remain available, with no stale target.
++There must be no Scan screen, blackout or system reentry. Do not update upstream
++PR #382 until these live checks succeed.
+diff --git a/mods/src/patches/parts/hotkeys.cc b/mods/src/patches/parts/hotkeys.cc
+index 730ba58..2fe2030 100644
+--- a/mods/src/patches/parts/hotkeys.cc
++++ b/mods/src/patches/parts/hotkeys.cc
+@@ -49,6 +49,7 @@
+ #include "patches/parts/daily_faction_bulk_claim.h"
+ #include "patches/parts/double_click_assign_ship.h"
+ #include "patches/parts/focus_search.h"
++#include "patches/parts/occupied_node_inspection.h"
+ #include "str_utils.h"
+ 
+ #include <il2cpp-tabledefs.h>
+@@ -1173,6 +1174,8 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+     }
+   }
+ 
++  occupied_node_inspection::Update();
++
+   if (!Key::IsInputFocused()) {
+     // Lets try to remove the pre-scan because we hit escape and it's visible
+     if (Key::Pressed(KeyCode::Escape)) {
+@@ -1209,7 +1212,7 @@ void ScreenManager_Update_Hook(auto original, ScreenManager* _this)
+ 
+     DailyFactionBulkClaimUpdate();
+ 
+-    if (MapKey::IsDown(GameFunction::ActionView)) {
++    if (MapKey::IsDown(GameFunction::ActionView) && !occupied_node_inspection::HandleActionView()) {
+       auto all_pre_scan_widgets = ObjectFinder<PreScanTargetWidget>::GetAll();
+ 
+       for (auto& pre_scan_widget : all_pre_scan_widgets) {
+diff --git a/mods/src/patches/parts/occupied_node_cycle.h b/mods/src/patches/parts/occupied_node_cycle.h
+new file mode 100644
+index 0000000..2e14ef1
+--- /dev/null
++++ b/mods/src/patches/parts/occupied_node_cycle.h
+@@ -0,0 +1,52 @@
++#pragma once
++
++#include <cstdint>
++
++namespace occupied_node_inspection
++{
++struct Address {
++  int64_t galaxy = 0, system = 0;
++  int32_t instance = 0;
++  bool operator==(const Address&) const = default;
++};
++
++// Only identities survive a frame. In particular, pooled viewers and contexts
++// are never kept alive or reused to restore the mining presentation.
++struct Cycle {
++  enum class Phase { Idle, AwaitLoot, Loot, Strength, AwaitNode };
++  Phase phase = Phase::Idle;
++  Address address;
++  int64_t node = 0, occupant = 0;
++  double deadline = 0;
++
++  bool Active() const { return phase != Phase::Idle; }
++  bool Pending() const { return phase == Phase::AwaitLoot || phase == Phase::AwaitNode; }
++  void Clear() { *this = {}; }
++
++  bool Begin(Address origin, int64_t node_id, int64_t fleet_id, double now)
++  {
++    Clear();
++    if (origin.system <= 0 || node_id <= 0 || fleet_id <= 0 || node_id == fleet_id) return false;
++    address = origin;
++    node = node_id;
++    occupant = fleet_id;
++    phase = Phase::AwaitLoot;
++    deadline = now + 2;
++    return true;
++  }
++
++  bool Matches(Address current, int64_t selected, double now) const
++  {
++    if (!Active() || current != address || (Pending() && now >= deadline)) return false;
++    if (phase == Phase::AwaitLoot) return selected == 0 || selected == node || selected == occupant;
++    if (phase == Phase::AwaitNode) return selected == 0 || selected == node || selected == occupant;
++    return selected == occupant;
++  }
++
++  void Restoring(double now)
++  {
++    phase = Phase::AwaitNode;
++    deadline = now + 2;
++  }
++};
++} // namespace occupied_node_inspection
+diff --git a/mods/src/patches/parts/occupied_node_inspection.cc b/mods/src/patches/parts/occupied_node_inspection.cc
+new file mode 100644
+index 0000000..4343dc4
+--- /dev/null
++++ b/mods/src/patches/parts/occupied_node_inspection.cc
+@@ -0,0 +1,187 @@
++#include "occupied_node_inspection.h"
++#include "occupied_node_cycle.h"
++#include "prime/Hub.h"
++#include "prime/MiningObjectViewerWidget.h"
++#include "prime/NavigationSectionManager.h"
++#include "prime/PreScanTargetWidget.h"
++#include "prime/navigation_binding.h"
++#include <spdlog/spdlog.h>
++#include <chrono>
++
++namespace occupied_node_inspection
++{
++namespace
++{
++namespace binding = navigation_binding;
++Cycle cycle;
++
++double Now()
++{
++  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++}
++
++template <typename T> Il2CppObject* Object(T* object) { return reinterpret_cast<Il2CppObject*>(object); }
++
++bool Visible(VisibilityController* visibility)
++{
++  return visibility && (visibility->_state == VisibilityState::Visible || visibility->_state == VisibilityState::Show);
++}
++
++bool ReadAddress(Il2CppObject* address, Address& value)
++{
++  return binding::Value(address, "get_Galaxy", "System.Int64", value.galaxy)
++         && binding::Value(address, "get_System", "System.Int64", value.system)
++         && binding::Value(address, "get_Instance", "System.Int32", value.instance) && value.system > 0;
++}
++
++bool CurrentAddress(NavigationManager* navigation, Address& value)
++{
++  auto* section = Hub::get_SectionManager();
++  if (!section || section->CurrentSection != SectionID::Navigation_System) return false;
++  auto* view = binding::Reference(Object(navigation), "get_ViewData", "Digit.Prime.Navigation.NavigationViewData");
++  return ReadAddress(binding::Reference(view, "get_ViewingAddress", "Digit.PrimeServer.Models.NodeAddress"), value);
++}
++
++Il2CppObject* Poi(NavigationInteractionUIContext* context)
++{
++  return binding::ReferenceField(Object(context), "Poi", "Digit.Prime.Navigation.POI");
++}
++
++int64_t Id(Il2CppObject* object)
++{
++  int64_t id = 0;
++  return binding::Value(object, "get_ID", "System.Int64", id) ? id : 0;
++}
++
++Il2CppObject* FindPoi(int64_t id)
++{
++  static auto helper = il2cpp_get_class_helper("Assembly-CSharp", "Digit.Prime.Navigation", "POI");
++  static auto* method = method_contract::Resolve(helper.get_cls(), "Get", true, "Digit.Prime.Navigation.POI",
++                                                {"System.Int64"});
++  Il2CppObject* result = nullptr;
++  void* args[] = {&id};
++  return binding::Invoke(method, nullptr, args, result) && Id(result) == id ? result : nullptr;
++}
++
++NavigationManager* Navigation()
++{
++  auto* sections = NavigationSectionManager::Instance();
++  return sections ? sections->SNavigationManager : nullptr;
++}
++
++struct Selection {
++  MiningObjectViewerWidget* mine = nullptr;
++  PreScanTargetWidget* ship = nullptr;
++  int64_t poi = 0, fleet = 0;
++};
++
++Selection Selected()
++{
++  // Prefer visible cards. Hidden pooled widgets are never restoration sources.
++  for (auto* mine : ObjectFinder<MiningObjectViewerWidget>::GetAll()) {
++    if (mine && Visible(mine->_visibilityController)) return {mine, nullptr, Id(Poi(mine->Context)), 0};
++  }
++  for (auto* ship : ObjectFinder<PreScanTargetWidget>::GetAll()) {
++    if (!ship || !Visible(ship->_visibilityController)) continue;
++    auto* buttons = ship->_scanEngageButtonsWidget;
++    auto* battle = buttons ? buttons->Context : nullptr;
++    auto* target = battle ? battle->TargetFleetDeployedData : nullptr;
++    return {nullptr, ship, Id(Poi(ship->Context)), Id(Object(target))};
++  }
++  return {};
++}
++
++void Cancel(const char* reason)
++{
++  if (cycle.Active()) spdlog::info("[OccupiedNode] {} node={} occupant={}", reason, cycle.node, cycle.occupant);
++  cycle.Clear();
++}
++} // namespace
++
++void Update()
++{
++  if (!cycle.Active()) return;
++  Address address;
++  auto* navigation = Navigation();
++  const auto selected = Selected();
++  if (!navigation || !CurrentAddress(navigation, address) || !cycle.Matches(address, selected.poi, Now())) {
++    Cancel("cancelled: section, selection or binding timeout");
++    return;
++  }
++  if (cycle.phase == Cycle::Phase::AwaitNode && selected.mine && selected.poi == cycle.node) {
++    // Selection success alone is insufficient; wait for the native node card.
++    Cancel("restored original node");
++    return;
++  }
++  if (cycle.phase == Cycle::Phase::AwaitLoot && selected.ship && selected.poi == cycle.occupant
++      && selected.fleet == cycle.occupant) {
++    auto* rewards = selected.ship->_rewardsButtonWidget;
++    auto* controller = rewards ? rewards->_rewardsController : nullptr;
++    if (!controller) return;
++    if (!Visible(controller)) controller->Show(true);
++    if (Visible(controller)) {
++      cycle.phase = Cycle::Phase::Loot;
++      spdlog::info("[OccupiedNode] loot node={} occupant={}", cycle.node, cycle.occupant);
++    }
++  }
++}
++
++bool HandleActionView()
++{
++  Update();
++  auto* navigation = Navigation();
++  Address address;
++  if (!navigation || !CurrentAddress(navigation, address)) return false;
++  const auto selected = Selected();
++  if (cycle.Pending()) return true;
++  if (selected.mine) {
++    Cancel("new node selection");
++    auto* mine = selected.mine;
++    if (mine->_occupiedState != OccupiedState::OtherPlayerOccupied) return false;
++    auto* buttons = mine->_scanEngageButtonsWidget;
++    auto* battle = buttons ? buttons->Context : nullptr;
++    auto* target = battle ? battle->TargetFleetDeployedData : nullptr;
++    DeployedFleetType fleet_type{};
++    auto* poi = Poi(mine->Context);
++    Address node_address;
++    auto* poi_address = binding::Reference(poi, "get_Address", "Digit.PrimeServer.Models.NodeAddress");
++    const auto fleet_id = Id(Object(target));
++    if (!target || !target->TryGetFleetType(fleet_type) || fleet_type != DeployedFleetType::Player
++        || !ReadAddress(poi_address, node_address) || node_address != address
++        || !cycle.Begin(address, selected.poi, fleet_id, Now())) return false;
++    if (!navigation->CanSelectPoi(fleet_id) || !navigation->SelectPoi(fleet_id)) {
++      Cancel("occupant selection failed");
++      return true;
++    }
++    spdlog::info("[OccupiedNode] selected occupant node={} occupant={}", cycle.node, cycle.occupant);
++    return true;
++  }
++  if (!cycle.Active()) return false;
++  if (cycle.Pending()) return true;
++  if (!selected.ship || selected.fleet != cycle.occupant) {
++    Cancel("target no longer matches");
++    return false;
++  }
++  if (cycle.phase == Cycle::Phase::Loot) {
++    auto* rewards = selected.ship->_rewardsButtonWidget;
++    auto* controller = rewards ? rewards->_rewardsController : nullptr;
++    if (!controller) { Cancel("rewards unavailable"); return true; }
++    controller->Hide();
++    cycle.phase = Cycle::Phase::Strength;
++    spdlog::info("[OccupiedNode] strength node={} occupant={}", cycle.node, cycle.occupant);
++    return true;
++  }
++  auto* original = FindPoi(cycle.node);
++  Address original_address;
++  auto* poi_address = binding::Reference(original, "get_Address", "Digit.PrimeServer.Models.NodeAddress");
++  if (!ReadAddress(poi_address, original_address) || original_address != address
++      || !navigation->CanSelectPoi(cycle.node) || !navigation->SelectPoi(cycle.node)) {
++    // Consume this key without toggling back to loot or claiming restoration.
++    spdlog::warn("[OccupiedNode] restoration failed node={} occupant={}; select the node again",
++                 cycle.node, cycle.occupant);
++    return true;
++  }
++  cycle.Restoring(Now());
++  return true;
++}
++} // namespace occupied_node_inspection
+diff --git a/mods/src/patches/parts/occupied_node_inspection.h b/mods/src/patches/parts/occupied_node_inspection.h
+new file mode 100644
+index 0000000..605347b
+--- /dev/null
++++ b/mods/src/patches/parts/occupied_node_inspection.h
+@@ -0,0 +1,9 @@
++#pragma once
++
++// Update runs even when input is focused, so old selections cannot survive a
++// system/section change. HandleActionView consumes only an occupied-node cycle.
++namespace occupied_node_inspection
++{
++void Update();
++bool HandleActionView();
++} // namespace occupied_node_inspection
+diff --git a/mods/src/prime/NavigationManager.h b/mods/src/prime/NavigationManager.h
+index c6b1047..67d2ad1 100644
+--- a/mods/src/prime/NavigationManager.h
++++ b/mods/src/prime/NavigationManager.h
+@@ -1,7 +1,15 @@
+ #pragma once
+ 
++#include "navigation_binding.h"
++
+ struct NavigationManager {
+ public:
++  bool CanSelectPoi(int64_t id)
++  { return navigation_binding::Select(reinterpret_cast<Il2CppObject*>(this), "CanSelectPoi", id); }
++
++  bool SelectPoi(int64_t id)
++  { return navigation_binding::Select(reinterpret_cast<Il2CppObject*>(this), "SelectPoi", id); }
++
+   void HideInteraction()
+   {
+     static auto HideInteraction = get_class_helper().GetMethod<void(NavigationManager*)>("HideInteraction");
+@@ -15,4 +23,4 @@ private:
+         il2cpp_get_class_helper("Assembly-CSharp", "Digit.Prime.Navigation", "NavigationManager");
+     return class_helper;
+   }
+-};
+\ No newline at end of file
++};
+diff --git a/mods/src/prime/navigation_binding.h b/mods/src/prime/navigation_binding.h
+new file mode 100644
+index 0000000..536145c
+--- /dev/null
++++ b/mods/src/prime/navigation_binding.h
+@@ -0,0 +1,67 @@
++#pragma once
++
++#include <il2cpp/il2cpp_helper.h>
++#include <il2cpp/method_contract.h>
++#include <cstdint>
++#include <cstring>
++
++// Checked, exception-aware bindings for the optional occupied-node viewer.
++// No client offsets or managed object references are cached.
++namespace navigation_binding
++{
++inline const MethodInfo* Method(Il2CppObject* object, const char* name, const char* result,
++                                std::initializer_list<const char*> parameters = {})
++{
++  for (auto* cls = object ? object->klass : nullptr; cls; cls = il2cpp_class_get_parent(cls)) {
++    if (auto* method = method_contract::Resolve(cls, name, false, result, parameters))
++      return method;
++  }
++  return nullptr;
++}
++
++inline bool Invoke(const MethodInfo* method, Il2CppObject* object, void** args, Il2CppObject*& result)
++{
++  result = nullptr;
++  if (!method || !method->invoker_method) return false;
++  Il2CppException* exception = nullptr;
++  result = il2cpp_runtime_invoke(method, object, args, &exception);
++  return !exception;
++}
++
++inline Il2CppObject* Reference(Il2CppObject* object, const char* getter, const char* type)
++{
++  Il2CppObject* result = nullptr;
++  auto* method = Method(object, getter, type);
++  return Invoke(method, object, nullptr, result) ? result : nullptr;
++}
++
++inline Il2CppObject* ReferenceField(Il2CppObject* object, const char* name, const char* type)
++{
++  auto* field = object ? il2cpp_class_get_field_from_name(object->klass, name) : nullptr;
++  if (!field || (field->type->attrs & FIELD_ATTRIBUTE_STATIC) || !method_contract::Type(field->type, type))
++    return nullptr;
++  return il2cpp_field_get_value_object(field, object);
++}
++
++template <typename T>
++bool Value(Il2CppObject* object, const char* getter, const char* type, T& value)
++{
++  Il2CppObject* boxed = nullptr;
++  if (!Invoke(Method(object, getter, type), object, nullptr, boxed) || !boxed
++      || !method_contract::Type(il2cpp_class_get_type(boxed->klass), type)) return false;
++  auto* data = il2cpp_object_unbox(boxed);
++  if (!data) return false;
++  std::memcpy(&value, data, sizeof(value));
++  return true;
++}
++
++inline bool Select(Il2CppObject* object, const char* name, int64_t id)
++{
++  auto* method = Method(object, name, "System.Boolean", {"System.Int64"});
++  Il2CppObject* boxed = nullptr;
++  void* args[] = {&id};
++  return Invoke(method, object, args, boxed) && boxed
++         && method_contract::Type(il2cpp_class_get_type(boxed->klass), "System.Boolean")
++         && *static_cast<bool*>(il2cpp_object_unbox(boxed));
++}
++} // namespace navigation_binding
+diff --git a/tests/occupied_node_cycle.cc b/tests/occupied_node_cycle.cc
+new file mode 100644
+index 0000000..d9ca6fb
+--- /dev/null
++++ b/tests/occupied_node_cycle.cc
+@@ -0,0 +1,40 @@
++#include "patches/parts/occupied_node_cycle.h"
++#include <iostream>
++#include <stdexcept>
++
++using namespace occupied_node_inspection;
++void Require(bool condition) { if (!condition) throw std::runtime_error("occupied node regression"); }
++
++int main()
++{
++  Cycle cycle;
++  const Address origin{4, 5000000011LL, 1};
++  const int64_t node = 9000000011LL, fleet = 8000000022LL;
++  Require(!cycle.Begin(origin, node, node, 0));
++  Require(!cycle.Active());
++  Require(cycle.Begin(origin, node, fleet, 10));
++  Require(cycle.Matches(origin, node, 10.1));
++  Require(cycle.Matches(origin, 0, 10.2)); // native binding gap
++  Require(cycle.Matches(origin, fleet, 10.3));
++  Require(!cycle.Matches(origin, fleet + 1, 10.3)); // unrelated/replacement fleet
++  Require(!cycle.Matches({4, origin.system + 1, 1}, fleet, 10.3));
++  Require(!cycle.Matches({4, origin.system, 2}, fleet, 10.3)); // same system, other instance
++  Require(!cycle.Matches({5, origin.system, 1}, fleet, 10.3));
++  Require(!cycle.Matches(origin, fleet, 12)); // exact deadline
++  cycle.phase = Cycle::Phase::Loot;
++  Require(cycle.Matches(origin, fleet, 100)); // no inspection duration limit
++  Require(!cycle.Matches(origin, node, 100));
++  Require(!cycle.Matches(origin, 0, 100)); // dismissed selection
++  cycle.phase = Cycle::Phase::Strength;
++  Require(cycle.Matches(origin, fleet, 100));
++  cycle.Restoring(100);
++  Require(cycle.Active() && cycle.Pending()); // true SelectPoi is not binding success
++  Require(cycle.node == node && cycle.occupant == fleet);
++  Require(cycle.Matches(origin, node, 101));
++  Require(!cycle.Matches(origin, node, 102)); // restoration timeout
++  cycle.Clear();
++  Require(!cycle.Active() && cycle.node == 0 && cycle.occupant == 0);
++  Require(cycle.Begin(origin, node, fleet + 1, 105)); // fresh occupant on next cycle
++  Require(cycle.occupant == fleet + 1);
++  std::cout << "Occupied node identity, selection, instance and timeout regressions passed\n";
++}
+diff --git a/xmake.lua b/xmake.lua
+index d75279c..9129892 100644
+--- a/xmake.lua
++++ b/xmake.lua
+@@ -6,6 +6,14 @@ includes("xmake/dependencies/common.lua")
+ set_languages("c++23")
+ set_runtimes("MT")
+ 
++target("occupied-node-cycle-tests")
++    set_kind("binary")
++    set_default(false)
++    add_files("tests/occupied_node_cycle.cc")
++    add_includedirs("mods/src")
++    set_exceptions("cxx")
++target_end()
++
+ includes("xmake/rules/stfc_identity.lua")
+ 
+ if is_plat("windows") then
