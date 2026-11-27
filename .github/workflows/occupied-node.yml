@@ -33,9 +33,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Patch application failed' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace errors' }
-          $forbidden = @('hostile_target_audit.h', 'pursuit_monitor.inc', 'tactical_policy.h', 'Community-Panel.cs')
-          foreach ($name in $forbidden) {
-            if (Get-ChildItem -Recurse -File mods/src | Where-Object Name -eq $name) { throw "Private dependency included: $name" }
+          $allowed = @(
+            'docs/occupied-node-inspection.md',
+            'mods/src/patches/parts/hotkeys.cc',
+            'mods/src/patches/parts/occupied_node_cycle.h',
+            'mods/src/patches/parts/occupied_node_inspection.cc',
+            'mods/src/patches/parts/occupied_node_inspection.h',
+            'mods/src/prime/NavigationManager.h',
+            'mods/src/prime/navigation_binding.h',
+            'tests/occupied_node_cycle.cc',
+            'tests/navigation_binding.cc',
+            'xmake.lua'
+          )
+          foreach ($file in (git ls-files --modified --others --exclude-standard)) {
+            if ($file -notin $allowed) { throw "Out-of-scope source file: $file" }
           }
       - uses: xmake-io/github-action-setup-xmake@v1.2.5
         with:
@@ -67,7 +78,7 @@ jobs:
         working-directory: source
         shell: pwsh
         run: |
-          foreach ($target in @('occupied-node-cycle-tests', 'il2cpp-runtime-tests', 'il2cpp-checked-tests')) {
+          foreach ($target in @('occupied-node-cycle-tests', 'navigation-binding-tests', 'il2cpp-runtime-tests', 'il2cpp-checked-tests')) {
             xmake build -y $target
             if ($LASTEXITCODE -ne 0) { throw "Build failed: $target" }
             xmake run $target

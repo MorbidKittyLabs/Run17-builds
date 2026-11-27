@@ -22,7 +22,7 @@ Rollback changes only the separate test copy. Open the same setup executable
 to return to the install/launch/rollback buttons.
 
 This test contains the upstream community mod plus the inspection feature.
-No DSE automation, repairs, hostile changes or custom controller are included.
+The change is limited to the occupied-node inspection cycle.
 
 Compile/automated tests do not establish live game compatibility. Upstream
 PR #382 must remain unchanged until the live acceptance checks succeed.
