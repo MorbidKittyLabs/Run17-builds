@@ -90,6 +90,12 @@ jobs:
         run: |
           xmake build -y -v stfc-community-mod
           if ($LASTEXITCODE -ne 0) { throw 'Full Windows DLL compilation failed' }
+      - name: Retain the validated compiled DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: OccupiedNode-Compiled-DLL
+          path: source/build/windows/x64/release/stfc-community-mod.dll
+          if-no-files-found: error
       - name: Compile click-to-install package
         shell: pwsh
         run: |
@@ -98,7 +104,10 @@ jobs:
           New-Item -ItemType Directory -Path package | Out-Null
           Copy-Item $dlls[0].FullName package/version.dll
           $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:package/OccupiedNode-Test-Setup.exe /resource:package/version.dll,OccupiedNode.version.dll occupied-node/Setup.cs
+          $setupSource=Join-Path $env:GITHUB_WORKSPACE 'occupied-node\Setup.cs'
+          $setupOutput=Join-Path $env:GITHUB_WORKSPACE 'package\OccupiedNode-Test-Setup.exe'
+          $payload=Join-Path $env:GITHUB_WORKSPACE 'package\version.dll'
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll ('/out:'+$setupOutput) ('/resource:'+$payload+',OccupiedNode.version.dll') $setupSource
           if ($LASTEXITCODE -ne 0) { throw 'Setup compilation failed' }
           foreach ($argument in @('--verify-payload', '--self-test')) {
             $process=Start-Process package/OccupiedNode-Test-Setup.exe -ArgumentList $argument -PassThru -Wait
